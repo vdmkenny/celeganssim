@@ -1,0 +1,9 @@
+# Primary datasets are fetched from their publishers, never vendored here.
+# Run: python scripts/fetch_data.py
+data/raw/
+data/processed/
+
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
