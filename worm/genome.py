@@ -161,12 +161,13 @@ GENE_EFFECTS: dict[str, GeneEffect] = {
     "mec-10": GeneEffect(
         "mec-10",
         "DEG/ENaC subunit partnering MEC-4",
-        "Only PARTIAL touch loss for a true deletion null. The classic alleles "
-        "that look fully touch-insensitive are recessive gain-of-function, not "
-        "nulls - the null is modelled here. Unlike mec-4, MEC-10 is also "
-        "required (with DEGT-1) for PVD harsh touch, so hard prodding is "
-        "degraded too.",
-        sensory_scale={"touch": 0.35, "harsh_touch": 0.3},
+        "Only PARTIAL touch loss for a true deletion null, with a modest "
+        "decrease in mechanoreceptor current amplitude (~50% of wild type). "
+        "The classic alleles that look fully touch-insensitive are recessive "
+        "gain-of-function, not nulls - the null is modelled here. Unlike "
+        "mec-4, MEC-10 is also required (with DEGT-1) for PVD harsh touch, "
+        "so hard prodding is degraded too.",
+        sensory_scale={"touch": 0.5, "harsh_touch": 0.3},
     ),
     "mec-2": GeneEffect(
         "mec-2",

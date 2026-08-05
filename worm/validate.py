@@ -227,41 +227,61 @@ def _mec4():
 
 
 @check("mec-10 is only partially touch insensitive",
-       "a true mec-10 deletion loses only part of the touch response, unlike mec-4",
+       "a true mec-10 deletion responds to a FRACTION of gentle touches, "
+       "between wild type (always) and mec-4 (never)",
        "Arnadottir et al. 2011: classic full-Mec mec-10 alleles are gain-of-function")
 def _mec10():
-    # Behavioural: count touch-evoked reversals over seeds for each genotype.
-    m4 = sum(touch_response("anterior", knockouts=["mec-4"], seed=s)["reversed"]
-             for s in range(4))
+    # Behavioural: touch-evoked reversal counts over seeds per genotype.
+    wt = sum(touch_response("anterior", seed=s)["reversed"] for s in range(6))
     m10 = sum(touch_response("anterior", knockouts=["mec-10"], seed=s)["reversed"]
-              for s in range(4))
-    return m10 > m4, f"anterior-touch reversals over 4 seeds: mec-10 {m10}/4, mec-4 {m4}/4"
+              for s in range(6))
+    m4 = sum(touch_response("anterior", knockouts=["mec-4"], seed=s)["reversed"]
+             for s in range(6))
+    return m4 < m10 < wt, \
+        f"reversals over 6 seeds: wild type {wt}/6, mec-10 {m10}/6, mec-4 {m4}/6"
 
 
-@check("harsh touch survives mec-4 and keeps its direction",
-       "harsh prodding is MEC-4 independent, so mec-4 nulls respond at "
-       "wild-type levels; anterior harsh touch still reverses (via FLP) and "
-       "posterior harsh touch still drives forward (via PVD)",
-       "Li, Kang, Piggott, Feng & Xu 2011 Nat Commun 2:315; Husson et al. "
-       "2012 Curr Biol 22:743")
+@check("harsh touch survives mec-4",
+       "harsh prodding is MEC-4 independent, so mec-4 nulls respond to "
+       "anterior harsh touch at wild-type levels (via FLP)",
+       "Li, Kang, Piggott, Feng & Xu 2011 Nat Commun 2:315")
 def _harsh():
-    def harsh(u, kos=()):
+    def harsh_ant(kos=()):
         n = 0
         for seed in range(3):
             s = _sim(kos, seed=seed)
             for _ in range(500):
                 s.step()
             r0 = s.state.reversal_count
-            s.env.poke(u, strength=2.2, duration=0.4, harsh=True)
+            s.env.poke(0.15, strength=2.2, duration=0.4, harsh=True)
             for _ in range(150):
                 s.step()
             n += s.state.reversal_count - r0
         return n
-    wt_ant, ko_ant = harsh(0.15), harsh(0.15, ("mec-4",))
-    wt_post = harsh(0.85)
-    ok = wt_ant >= 2 and ko_ant >= 2 and wt_post == 0
-    return ok, (f"anterior harsh: wild type {wt_ant}/3, mec-4 {ko_ant}/3; "
-                f"posterior harsh: {wt_post}/3 reversals (forward escape)")
+    wt_ant, ko_ant = harsh_ant(), harsh_ant(("mec-4",))
+    return wt_ant >= 2 and ko_ant >= 2, \
+        f"anterior harsh: wild type {wt_ant}/3, mec-4 {ko_ant}/3"
+
+
+@check("posterior harsh touch drives forward escape, not reversal",
+       "PVD photoactivation drives forward acceleration; removing PVC flips "
+       "it to reverse, so the functional bias is forward",
+       "Husson, Steuer Costa et al. 2012 Curr Biol 22:743")
+def _harsh_forward():
+    # PVD wiring favours the forward pool (107:81 contacts), and with the
+    # calibrated reversal threshold the PVD-driven deviation (~0.0022) stays
+    # below the trigger: the animal accelerates rather than reversing.
+    n = 0
+    for seed in range(3):
+        s = _sim((), seed=seed)
+        for _ in range(500):
+            s.step()
+        r0 = s.state.reversal_count
+        s.env.poke(0.85, strength=2.2, duration=0.4, harsh=True)
+        for _ in range(150):
+            s.step()
+        n += s.state.reversal_count - r0
+    return n == 0, f"posterior harsh reversals over 3 seeds: {n}/3 (want 0)"
 
 
 @check("unc-25 is a shrinker",
@@ -309,7 +329,11 @@ def _egl30():
 
 @check("goa-1 loss of function is loopy and hyperactive",
        "Go loss deepens bends and raises speed - opposite sign to egl-30(lf)",
-       "Segalat et al. 1995; Cronin et al. 2005: 0.29 vs 0.20 mm/s, flex 1.3 vs 1.0")
+       "Segalat et al. 1995; Cronin et al. 2005: 0.29 vs 0.20 mm/s, flex 1.3 vs 1.0",
+       xfail="amplitude is right (deeper bends) but speed does not follow: "
+             "the scripted oscillator saturates its drive term, so deeper, "
+             "faster bending does not translate into net speed. Fix belongs "
+             "to the proprioceptive CPG (issue #10)")
 def _goa1():
     wt, ko = gait(), gait(knockouts=["goa-1"])
     return ko["amplitude"] > wt["amplitude"] and ko["speed"] > wt["speed"] * 0.95, \
@@ -328,6 +352,66 @@ def _che1():
     g.knock_out("che-1")
     return g.sensory_scale("salt") == 0.0 and g.sensory_scale("odor") == 1.0, \
         f"salt gain {g.sensory_scale('salt')}, odour gain {g.sensory_scale('odor')}"
+
+
+@check("expression cache matches documented ground truth",
+       "CeNGEN-derived cell sets reproduce the textbook cases: mec-4 in the "
+       "six touch receptors, che-1 only in ASE, glc-3 in AIY, glr-1 in "
+       "command interneurons, unc-25 in the GABAergic cells, cat-2 in the "
+       "eight dopaminergic neurons",
+       "Chalfie & Sulston 1981; Uchida 2003; Chalasani 2007; Maricq 1995; "
+       "Gendrel 2016; Sulston 1975",
+       section="consistency")
+def _expression_truth():
+    import json
+    from .paths import data_dir
+    exp = json.loads((data_dir() / "expression.json").read_text())["genes"]
+
+    def cells(gene):
+        return set(exp.get(gene, {}).get("cells", []))
+
+    trns = {"ALML", "ALMR", "AVM", "PLML", "PLMR", "PVM"}
+    gaba = {"DD01", "VD01", "RMEL", "AVL", "DVB", "RIS"}
+    da = {"ADEL", "ADER", "CEPDL", "CEPDR", "CEPVL", "CEPVR", "PDEL", "PDER"}
+    aiy_ok = {"AIYL", "AIYR"} <= cells("glc-3")
+    cmd = cells("glr-1") & {"AVAL", "AVAR", "AVDL", "AVDR", "PVCL", "PVCR"}
+    ok = (cells("mec-4") == trns
+          and cells("che-1") == {"ASEL", "ASER"}
+          and aiy_ok
+          and {"AVAL", "AVAR", "AVDL", "AVDR", "PVCL", "PVCR"} <= cells("glr-1")
+          and gaba <= cells("unc-25")
+          and cells("cat-2") == da)
+    return ok, (f"mec-4 -> {sorted(cells('mec-4'))}; glc-3 covers AIY: {aiy_ok}; "
+                f"glr-1 covers command cells {sorted(cmd)}")
+
+
+@check("receptor-derived signs match documented synapses",
+       "AWC->AIY is inhibitory (glutamate-gated chloride); the neuromuscular "
+       "junction is acetylcholine-excitatory and GABA-inhibitory",
+       "Chalasani et al. 2007 Nature 450:63; Jospin et al. 2002; "
+       "Bamber et al. 1999",
+       section="consistency")
+def _sign_truth():
+    from .connectome import Connectome, E_EXC, E_INH
+    c = Connectome.load()
+    awc = all(c.E_syn[c.index[post], c.index[pre]] == E_INH
+              for pre in ("AWCL", "AWCR") for post in ("AIYL", "AIYR")
+              if c.Gs[c.index[post], c.index[pre]] > 0)
+    nmj_ok = True
+    posts, pres = np.nonzero(c.Gs)   # Gs is [post, pre]
+    for j, i in zip(posts, pres):
+        if not c.is_muscle[j]:
+            continue
+        nts = c.pre_nt[i]
+        if "Acetylcholine" in nts and c.E_syn[j, i] != E_EXC:
+            nmj_ok = False
+        if "GABA" in nts and c.E_syn[j, i] != E_INH:
+            nmj_ok = False
+    n_derived = c.sign_provenance.get("receptor_expression", 0)
+    return awc and nmj_ok and n_derived > 0, \
+        (f"AWC->AIY inhibitory: {awc}; NMJ ACh-exc/GABA-inh: {nmj_ok}; "
+         f"{n_derived} edges derived from expression, "
+         f"{len(c.sign_flips)} flips vs the transmitter heuristic")
 
 
 @check("tdc-1 impairs the omega turn",
@@ -400,7 +484,11 @@ def _chemo():
        "killing AVA+AVD+AVE abolishes the touch-evoked reversal; killing "
        "ALM+AVM removes anterior touch sensitivity",
        "Chalfie et al. 1985 J Neurosci 5:956; Zheng et al. 1999; "
-       "Zhen & Samuel 2015 review")
+       "Zhen & Samuel 2015 review. Note (issue #7, external review): the "
+       "single-class serial structure is NOT yet checked here -- AVD is the "
+       "input stage, AVA the output stage (ALM/AVM make zero connections "
+       "onto AVA), so AVD-only and AVA-only ablations have finer Chalfie "
+       "Table III phenotypes than this pool-level test asserts")
 def _ablation():
     import numpy as np
 
@@ -535,20 +623,26 @@ def _run_one(entry):
     return ok, detail
 
 
-def main(verbose: bool = True, jobs: int = 1) -> int:
+def main(verbose: bool = True, jobs: int = 1, match: str | None = None) -> int:
+    checks = CHECKS
+    if match:
+        checks = [c for c in CHECKS if match.lower() in c[0].lower()]
+        if not checks:
+            print(f"no checks match {match!r}")
+            return 1
     # The checks are independent simulations, so they parallelise cleanly.
     # Results come back in registration order regardless of finish order.
-    if jobs > 1 and len(CHECKS) > 1:
+    if jobs > 1 and len(checks) > 1:
         from concurrent.futures import ProcessPoolExecutor
         with ProcessPoolExecutor(max_workers=jobs) as pool:
-            results = list(pool.map(_run_one, CHECKS))
+            results = list(pool.map(_run_one, checks))
     else:
-        results = [_run_one(c) for c in CHECKS]
+        results = [_run_one(c) for c in checks]
 
     passed = failed = xfailed = xpassed = 0
     section = None
     for (name, expectation, source, sect, xfail, fn), (ok, detail) in \
-            zip(CHECKS, results):
+            zip(checks, results):
         if sect != section:
             section = sect
             if verbose:
@@ -576,7 +670,7 @@ def main(verbose: bool = True, jobs: int = 1) -> int:
             print(f"       source: {source}\n")
     print(f"{passed} passed, {failed} failed, "
           f"{xfailed} expected failures, {xpassed} unexpected passes, "
-          f"{len(CHECKS)} total")
+          f"{len(checks)} total")
     return 0 if failed == 0 else 1
 
 

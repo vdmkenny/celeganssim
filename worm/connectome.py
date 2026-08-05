@@ -4,41 +4,29 @@ Two graphs are built over the same cell index:
   Gs  chemical synapses   directed, weight = number of synaptic contacts
   Gg  gap junctions       symmetric, weight = number of contacts
 
-Chemical synapses carry a sign derived from the presynaptic cell's
-neurotransmitter, which is where the neuron metadata earns its keep.
+Chemical synapses carry a sign derived per edge from the POSTSYNAPTIC cell's
+measured receptor expression (CeNGEN): a synapse's sign is a property of the
+receptor, not the transmitter -- glutamate excites through GLR-1-class cation
+channels and inhibits through the glutamate-gated chloride channels, so the
+same transmitter gets opposite signs on different cells. Edges that
+expression cannot resolve (metabotropic transmitters, cells outside CeNGEN,
+exact ties) fall back to a transmitter-level heuristic, tagged as such.
 """
 
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
 
 from .paths import data_dir as _data_dir
 
-# Glutamate in C. elegans is target-dependent: excitatory through
-# GLR-1/AMPA receptors, inhibitory through the glutamate-gated chloride channels
-# AVR-14/AVR-15/GLC-1..4. A single global polarity therefore gets specific,
-# well-documented connections backwards -- most visibly the touch circuit, where
-# posterior touch must SUPPRESS reversal rather than trigger it.
-#
-# These are the documented inhibitory glutamatergic connections, listed as
-# (presynaptic class, postsynaptic class). Matching is by name prefix so
-# PLML/PLMR both match "PLM".
-# Refs: Chalfie et al. 1985 (touch circuit); Chalasani et al. 2007 Nature
-# (AWC -> AIY via glutamate-gated chloride); Wicks et al. 1996 tap-withdrawal
-# model, which assigns exactly these signs.
-INHIBITORY_GLUTAMATE: list[tuple[str, str]] = [
-    # Posterior touch suppresses backward, so the animal accelerates forward.
-    ("PLM", "AVA"), ("PLM", "AVD"), ("PLM", "AVB"),
-    # Anterior touch suppresses forward, so the animal reverses.
-    ("ALM", "AVB"), ("ALM", "PVC"), ("AVM", "AVB"), ("AVM", "PVC"),
-    # Odour tonically inhibits AIY; removing odour releases it.
-    ("AWC", "AIY"),
-]
-
-
+# Transmitter-level sign heuristic: the FALLBACK for edges where measured
+# receptor expression cannot decide. Monoamines here are mostly metabotropic
+# (GPCRs), whose postsynaptic effect depends on downstream signalling rather
+# than ion selectivity, so their entries stay permanently heuristic.
 NT_POLARITY: dict[str, float] = {
     "Acetylcholine": +1.0,
     "Glutamate": +0.4,
@@ -115,35 +103,78 @@ class Connectome:
                 if i != j:
                     self.Gg[j, i] += w
         self.skipped_edges = skipped
-        self._apply_glutamate_overrides()
 
-        # Per-cell transmitter label, used for gene-knockout scaling.
+        # Per-cell transmitter label, used for gene-knockout scaling and for
+        # the receptor-sign derivation below.
         self.pre_nt: list[tuple[str, ...]] = [
             tuple(self.cell_info[n].get("neurotransmitters") or ()) for n in self.names
         ]
+        self._derive_signs()
 
-    def _apply_glutamate_overrides(self) -> None:
-        """Flip the documented inhibitory glutamatergic synapses to E_INH.
+    def _derive_signs(self) -> None:
+        """Per-edge reversal potentials from postsynaptic receptor expression.
 
-        Pairs carrying an actual chemical synapse are recorded in `overrides`
-        and the rest in `inert_overrides`. PLM has no chemical output in Cook
-        et al., reaching the forward command interneuron PVC purely through gap
-        junctions, so its entries are inert against this edgelist and present
-        for anatomical completeness against others.
+        For each chemical edge, sum the CeNGEN expression levels of the
+        excitatory and of the inhibitory receptor genes for the presynaptic
+        transmitter in the postsynaptic cell; the larger side sets the sign
+        and the margin is reported. Body-wall muscles are not in CeNGEN, but
+        their junction is measured directly: acetylcholine excites through
+        the nicotinic UNC-29/UNC-38/UNC-63/LEV-1/LEV-8 receptors, GABA
+        inhibits through UNC-49. Edges with no receptor evidence keep the
+        transmitter-level fallback. Every edge's provenance is counted in
+        self.sign_provenance so the mix of derived and heuristic signs is
+        inspectable.
         """
-        self.overrides: list[tuple[str, str]] = []
-        self.inert_overrides: list[tuple[str, str]] = []
-        for pre_cls, post_cls in INHIBITORY_GLUTAMATE:
-            pres = [n for n in self.names if n.startswith(pre_cls)]
-            posts = [n for n in self.names if n.startswith(post_cls)]
-            for a in pres:
-                for b in posts:
-                    i, j = self.index[a], self.index[b]
-                    self.E_syn[j, i] = E_INH
-                    if self.Gs[j, i] > 0:
-                        self.overrides.append((a, b))
-                    else:
-                        self.inert_overrides.append((a, b))
+        d = _data_dir()
+        rec_path, exp_path = d / "receptors.json", d / "expression.json"
+        self.sign_provenance: Counter = Counter()
+        self.sign_flips: list[tuple[str, str, float, float]] = []
+        if not (rec_path.exists() and exp_path.exists()):
+            self.sign_provenance["transmitter_fallback"] = \
+                int((self.Gs > 0).sum())
+            return
+
+        receptors = json.loads(rec_path.read_text())["receptors"]
+        expression = json.loads(exp_path.read_text())["genes"]
+        by_nt: dict[tuple[str, str], list[str]] = {}
+        for gene, rec in receptors.items():
+            if rec["sign"] in ("excitatory", "inhibitory"):
+                by_nt.setdefault((rec["transmitter"], rec["sign"]), []).append(gene)
+
+        def level(gene: str, cell: str) -> float:
+            entry = expression.get(gene)
+            return entry["levels"].get(cell, 0.0) if entry else 0.0
+
+        # Gs is [post, pre]: np.nonzero returns (postsynaptic, presynaptic).
+        posts, pres = np.nonzero(self.Gs)
+        for j, i in zip(posts, pres):
+            post = self.names[j]
+            nts = self.pre_nt[i]
+            if not nts:
+                self.sign_provenance["transmitter_fallback"] += 1
+                continue
+            exc = inh = 0.0
+            tag = "receptor_expression"
+            if self.is_muscle[j]:
+                # Measured NMJ, no scRNA-seq needed: ACh excites, GABA inhibits.
+                exc = float("Acetylcholine" in nts)
+                inh = float("GABA" in nts)
+                tag = "nmj_literature"
+            else:
+                for nt in nts:
+                    for g in by_nt.get((nt, "excitatory"), ()):
+                        exc += level(g, post)
+                    for g in by_nt.get((nt, "inhibitory"), ()):
+                        inh += level(g, post)
+            if exc == inh:
+                self.sign_provenance["transmitter_fallback"] += 1
+                continue
+            before = float(self.E_syn[j, i])
+            self.E_syn[j, i] = E_EXC if exc > inh else E_INH
+            self.sign_provenance[tag] += 1
+            if (before == E_INH) != (exc < inh):
+                self.sign_flips.append((self.names[i], post, before,
+                                        float(self.E_syn[j, i])))
 
     # -- queries --------------------------------------------------------
     def idx(self, name: str) -> int:
@@ -284,12 +315,16 @@ class Connectome:
         return out
 
     def stats(self) -> dict:
+        # Unordered gap-junction pairs: the edgelist lists most pairs in both
+        # directions but ~20 only once, so (Gg>0).sum()//2 would miscount.
+        either_direction = (self.Gg > 0) | (self.Gg.T > 0)
+        gap_pairs = int(np.count_nonzero(np.triu(either_direction)))
         return {
             "cells": self.n,
             "neurons": int(self.is_neuron.sum()),
             "muscles": int(self.is_muscle.sum()),
             "chemical_edges": int((self.Gs > 0).sum()),
-            "electrical_edges": int((self.Gg > 0).sum() // 2),
+            "electrical_edges": gap_pairs,
             "chemical_contacts": float(self.Gs.sum()),
             "electrical_contacts": float(self.Gg.sum() / 2),
             "skipped_edges": self.skipped_edges,

@@ -32,7 +32,12 @@ def cmd_info(a) -> int:
             nt[x] = nt.get(x, 0) + 1
     print("  neurotransmitters: " +
           ", ".join(f"{k} {v}" for k, v in sorted(nt.items(), key=lambda kv: -kv[1])))
-    print(f"  inhibitory-glutamate overrides active: {len(set(c.overrides))}")
+    sp = c.sign_provenance
+    total = sum(sp.values())
+    print("  synapse signs: " + ", ".join(f"{k} {v}" for k, v in sp.most_common()))
+    if c.sign_flips:
+        print(f"  {len(c.sign_flips)} edges changed sign vs the transmitter "
+              f"heuristic (of {total})")
     return 0
 
 
@@ -211,7 +216,7 @@ def cmd_validate(a) -> int:
     from .validate import CHECKS, main as run_validation
     import os
     jobs = a.jobs if a.jobs > 0 else min(os.cpu_count() or 1, len(CHECKS))
-    return run_validation(verbose=not a.quiet, jobs=jobs)
+    return run_validation(verbose=not a.quiet, jobs=jobs, match=a.match)
 
 
 def cmd_params(a) -> int:
@@ -282,6 +287,7 @@ def main(argv=None) -> int:
     s.add_argument("--quiet", action="store_true")
     s.add_argument("--jobs", type=int, default=0,
                    help="parallel workers; 0 = one per check, up to core count")
+    s.add_argument("--match", help="run only checks whose name contains this")
     s.set_defaults(fn=cmd_validate)
 
     s = sub.add_parser("params", help="audit every model parameter and its provenance")

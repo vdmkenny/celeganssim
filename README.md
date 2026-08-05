@@ -31,7 +31,7 @@ processed files.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 24 checks against published measurements, in parallel
+worm validate         # 27 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -173,7 +173,7 @@ lands on measured resting potentials.
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 24 checks: 19 behavioural, 5 consistency, gaps as expected failures |
+| `worm/validate.py` | 27 checks: 22 behavioural, 5 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry with provenance tags |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -188,6 +188,7 @@ lands on measured resting potentials.
 | Neuron metadata | OpenWorm owmeta | type and transmitter for 302 neurons |
 | Expression | CeNGEN via wormneuroatlas | 128 neuron classes x 13,669 genes |
 | Cell classification | WormAtlas | lineage and anatomical class |
+| Receptor pharmacology | derived from RefSeq product descriptions | 72 ligand-gated receptors with ion selectivity |
 
 The datasets disagree in specific ways, each handled in code where it arises:
 gap junctions are listed in both directions, so the matrix is filled directly
@@ -200,13 +201,14 @@ rather than making it, so are not modelled as GABAergic.
 
 ## Validation
 
-`worm validate` runs 24 checks against published measurements: 19 behavioural
-(the animal is run and measured) and 5 consistency checks (parameter and data
-invariants). 22 pass. The 2 failures are known gaps, reported as expected
+`worm validate` runs 27 checks against published measurements: 20 behavioural
+(the animal is run and measured) and 7 consistency checks (parameter and data
+invariants). 24 pass. The 3 failures are known gaps, reported as expected
 failures and tracked, not hidden: without spontaneous reversals there are no
 pirouettes, so chemotaxis cannot yet discriminate salt-blind mutants
-([issue #6](https://github.com/vdmkenny/celeganssim/issues/6)), and the
-fixed-frequency oscillator cannot adapt gait to the medium
+([issue #6](https://github.com/vdmkenny/celeganssim/issues/6)); the
+fixed-frequency oscillator cannot adapt gait to the medium, and cannot turn
+`goa-1`'s deeper bends into speed
 ([issue #10](https://github.com/vdmkenny/celeganssim/issues/10)). When those
 issues are fixed, the checks flip from XFAIL to PASS and the suite will say so.
 
@@ -256,8 +258,13 @@ potentials, developmental timings, body sizes, brood size, lifespan.
   [docs/emergent-cpg.md](docs/emergent-cpg.md) sets out what an emergent version
   requires. No published model produces C. elegans locomotion emergently from
   the connectome.
-- **Synapse signs are inferred** from transmitter identity, with documented
-  exceptions overridden per edge. This is genuinely uncertain in the literature.
+- **Synapse signs are derived per edge** from the postsynaptic cell's measured
+  receptor expression (CeNGEN): which ligand-gated channels a cell transcribes,
+  and whether those are cation or anion channels, sets each synapse's sign.
+  The receptor table itself is derived from the RefSeq product descriptions
+  (`scripts/build_receptors.py`). Where expression cannot decide (metabotropic
+  transmitters, cells outside CeNGEN, ties), a transmitter-level heuristic is
+  the tagged fallback.
 - **The genome sequence is not load-bearing.** The annotation drives gene lookup
   and knockouts, but the 100 Mb of sequence yields chromosome lengths and GC
   content. Mapping a gene to what its loss *does* is a curated table.

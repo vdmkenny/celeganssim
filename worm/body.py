@@ -134,7 +134,6 @@ class Body:
         coupling = 6.0
         err = np.angle(np.exp(1j * (target - self.phase)))
         self.phase = self.phase + dt * (omega + coupling * err)
-        self.phase[0] += dt * 0.0  # head advances on omega alone
         self.phase = np.mod(self.phase, 2 * np.pi)
 
         # Cholinergic excitation is phasic and one-sided; GABAergic inhibition

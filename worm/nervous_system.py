@@ -63,10 +63,11 @@ class NeuralParams:
     E_cell = -65.0    # leak reversal potential, mV
     # Per anatomical contact. Measured coupling is reported whole-cell across
     # all the contacts a pair shares: 56 pS for AVAL-AVAR (18 contacts) and
-    # 60-95 pS one-way for AVA-VA5, so a single contact is a few pS.
+    # 60-95 pS one-way for AVA-VA5. At 3 pS per contact the AVAL-AVAR pair
+    # comes out at 54 pS against the measured 56 pS.
     # Refs: Liu, Chen & Wang 2020 Nat Commun 11:5076; Liu et al. 2017 Nat
     # Commun 8:14818.
-    g_gap = 0.005     # conductance of one gap-junction contact, nS (5 pS)
+    g_gap = 0.003     # conductance of one gap-junction contact, nS (3 pS)
     g_syn = 0.1       # conductance of one chemical synaptic contact, nS
     E_exc = 0.0       # excitatory reversal potential, mV
     E_inh = -48.0     # inhibitory reversal potential, mV (Wicks Table 1)
@@ -137,9 +138,10 @@ class NervousSystem:
         self.rng = np.random.default_rng(seed)
         self.n = conn.n
 
-        # Per-edge reversal potentials, E_syn[post, pre]. Mostly determined by
-        # the presynaptic transmitter, but glutamate is target-dependent in this
-        # animal, so the connectome carries explicit overrides.
+        # Per-edge reversal potentials, E_syn[post, pre]. Derived from the
+        # postsynaptic cell's measured receptor expression where possible
+        # (glutamate is target-dependent in this animal), with a
+        # transmitter-level heuristic as the tagged fallback.
         self.E_syn = conn.E_syn
 
         half = 0.5 * self.p.a_r

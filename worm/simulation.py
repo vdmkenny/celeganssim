@@ -38,7 +38,15 @@ class SimConfig:
     # oxygen, AWC's baseline activity, ambient temperature) holds the command
     # neurons well off rest, so a fixed threshold either never fires or fires
     # constantly. Adapting the baseline is also what the real animal does.
-    reversal_threshold: float = 0.018
+    # Calibrated against the receptor-derived sign regime. Measured peak
+    # command-balance deviation to a strength-1 anterior poke: wild type
+    # ~0.007; mec-10 (50% residual touch current, Arnadottir et al. 2011)
+    # 0.0028-0.0037; harsh posterior ~0.0022; gentle posterior ~0.001;
+    # mec-4/mec-2 nulls and poke-free fluctuation ~0.0005 or less. The
+    # threshold sits inside the mec-10 band: wild type always responds,
+    # mec-10 responds to a FRACTION of pokes (the partial-loss phenotype),
+    # and nulls, gentle-posterior and harsh-posterior touch stay below it.
+    reversal_threshold: float = 0.0032
     baseline_tau_s: float = 8.0
     reversal_min_s: float = 0.9
     reversal_max_s: float = 4.0
@@ -152,6 +160,10 @@ class WormSimulation:
         self.body.reset(x, y, heading)
         self.state = SimState()
         self.state.trail = [self.body.X.copy()]
+        # Resting activation is 0.5 for every cell by construction: activation
+        # is sigmoid(beta * (V - V_th)) and the threshold solve puts each cell
+        # at V == V_th at rest. It is therefore invariant under ablation and
+        # knockouts, both of which re-solve V_th and move V with it.
         self._rest_fwd = float(np.mean(self.ns.activation(self.i_fwd)))
         self._rest_bwd = float(np.mean(self.ns.activation(self.i_bwd)))
         self._bwd_baseline: float | None = None

@@ -83,8 +83,13 @@ GATE = {
 # and is high-threshold (Albeg et al. 2011; Chatzigeorgiou et al. 2010).
 TOUCH_FIELDS: list[dict] = [
     # (cells, start, end, edge softness, modality this counts toward)
+    # ASH/FLP/OLQ endings sit at the nose tip; the taper must die out within
+    # a few percent of body length or a mid-head poke leaks into the
+    # nociceptors (measured: soft=0.035 left 1.8% coverage at u=0.20, which
+    # produced a reversal-biased drive in a mec-4 null that should have had
+    # none).
     {"cells": ["ASHL", "ASHR", "FLPL", "FLPR", "OLQDL", "OLQDR", "OLQVL", "OLQVR"],
-     "start": -0.02, "end": 0.06, "soft": 0.035, "modality": "nose_touch"},
+     "start": -0.02, "end": 0.06, "soft": 0.012, "modality": "nose_touch"},
     {"cells": ["ALML", "ALMR"],
      "start": 0.02, "end": 0.48, "soft": 0.075, "modality": "touch_anterior"},
     # AVM is born post-embryonically, sits ventrally and slightly posterior to

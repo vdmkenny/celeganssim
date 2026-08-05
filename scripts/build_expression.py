@@ -97,27 +97,48 @@ def main() -> int:
     cells = json.loads((OUT / "cells.json").read_text())["cells"]
     cell_names = sorted(cells)
 
+    # Genes to cache: the modelled knockout loci plus every classified
+    # ligand-gated receptor, so postsynaptic signs can be derived from
+    # measured expression rather than assumed per transmitter.
+    genes_wanted = set(GENE_EFFECTS)
+    receptors_path = OUT / "receptors.json"
+    if receptors_path.exists():
+        receptors = json.loads(receptors_path.read_text())["receptors"]
+        genes_wanted |= set(receptors)
+        print(f"caching {len(genes_wanted)} genes "
+                  f"({len(GENE_EFFECTS)} effect loci + {len(receptors)} receptors)")
+    else:
+        print(f"caching {len(genes_wanted)} effect loci "
+              "(no receptors.json; run scripts/build_receptors.py)")
+
     cg = wa.Cengen()
     neuron_ids = [str(x) for x in cg.get_neuron_ids()]
     gene_names = [str(g) for g in cg.get_gene_names()]
 
     out: dict[str, dict] = {}
     missing: list[str] = []
-    for gene in sorted(GENE_EFFECTS):
+    for gene in sorted(genes_wanted):
         if gene not in gene_names:
             missing.append(gene)
             continue
         # th=4 is CeNGEN's own moderately stringent expression threshold.
         ex = np.asarray(cg.get_expression(gene_names=[gene], th=4)).ravel()
-        classes = [neuron_ids[i] for i in np.where(ex > 0)[0]]
-        expressed: list[str] = []
-        for c in classes:
-            expressed.extend(expand(c, cell_names))
-        expressed = sorted(set(expressed))
-        out[gene] = {"cengen_classes": sorted(classes),
-                     "cells": expressed,
-                     "n_cells": len(expressed)}
-        print(f"  {gene:8} {len(classes):3} classes -> {len(expressed):3} cells")
+        # Keep the LEVELS, not just above-threshold presence: sign derivation
+        # weighs excitatory against inhibitory receptor expression, and a
+        # binary cache cannot say by how much.
+        levels = {neuron_ids[i]: round(float(ex[i]), 3)
+                  for i in np.where(ex > 0)[0]}
+        cells_out: dict[str, float] = {}
+        for c, lvl in levels.items():
+            for cell in expand(c, cell_names):
+                # Expanded classes (VD_DD etc.) share one measurement; each
+                # covered cell inherits the class level, documented as such.
+                cells_out[cell] = lvl
+        out[gene] = {"cengen_classes": sorted(levels),
+                     "cells": sorted(cells_out),
+                     "levels": cells_out,
+                     "n_cells": len(cells_out)}
+        print(f"  {gene:8} {len(levels):3} classes -> {len(cells_out):3} cells")
 
     payload = {
         "source": "CeNGEN scRNA-seq (Taylor et al. 2021 Cell 184:4329) via "
