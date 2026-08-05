@@ -65,7 +65,7 @@ class Body:
         self.body_length = getattr(self, "body_length", BODY_LENGTH_MM)
         self._seg_len = self.body_length / N_SEG
         # Radius profile: C. elegans is a tapered cylinder, fattest just past
-        # the middle. Used to weight drag along the body.
+        # the middle. Weights drag along the body.
         self._set_radius()
         self._update_shape()
 

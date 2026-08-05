@@ -17,12 +17,7 @@ import numpy as np
 
 from .paths import data_dir as _data_dir
 
-# Reversal potential assigned to a synapse based on the presynaptic transmitter.
-# In C. elegans acetylcholine is generally excitatory and GABA generally
-# inhibitory. Glutamate is genuinely mixed: it excites via non-NMDA receptors
-# but inhibits through the glutamate-gated chloride channels AVR-14/GLC-1/GLC-2,
-# so it is treated as mildly net-excitatory here and flagged as an approximation.
-# Glutamate in C. elegans is genuinely target-dependent: excitatory through
+# Glutamate in C. elegans is target-dependent: excitatory through
 # GLR-1/AMPA receptors, inhibitory through the glutamate-gated chloride channels
 # AVR-14/AVR-15/GLC-1..4. A single global polarity therefore gets specific,
 # well-documented connections backwards -- most visibly the touch circuit, where
@@ -113,11 +108,10 @@ class Connectome:
             if e["type"] == "chemical":
                 self.Gs[j, i] += w
             else:
-                # The edgelist already contains each gap junction in both
-                # directions (1339 of 1359 unordered pairs appear twice), so
-                # symmetrising here would double every electrical weight. The
-                # handful of self-referential rows are reconstruction
-                # artifacts and are dropped.
+                # The edgelist lists each gap junction in both directions
+                # (1339 of 1359 unordered pairs), so the matrix is filled
+                # directly rather than symmetrised. Self-referential rows are
+                # reconstruction artifacts and are dropped.
                 if i != j:
                     self.Gg[j, i] += w
         self.skipped_edges = skipped
@@ -131,11 +125,11 @@ class Connectome:
     def _apply_glutamate_overrides(self) -> None:
         """Flip the documented inhibitory glutamatergic synapses to E_INH.
 
-        Only records pairs that carry an actual chemical synapse in this
-        dataset. Notably PLM has no chemical output at all in Cook et al. --
-        it reaches the forward command interneuron PVC purely through gap
-        junctions -- so the PLM entries are inert here and kept only so the
-        table stays anatomically honest if a different edgelist is swapped in.
+        Pairs carrying an actual chemical synapse are recorded in `overrides`
+        and the rest in `inert_overrides`. PLM has no chemical output in Cook
+        et al., reaching the forward command interneuron PVC purely through gap
+        junctions, so its entries are inert against this edgelist and present
+        for anatomical completeness against others.
         """
         self.overrides: list[tuple[str, str]] = []
         self.inert_overrides: list[tuple[str, str]] = []

@@ -202,8 +202,8 @@ class SensorySystem:
                                         0.0, 1.5))
 
         # Mechanosensation is positional and handled after this loop, since
-        # cells within one modality get different weights depending on where
-        # along the body the animal was touched.
+        # cells within one modality take different weights depending on where
+        # along the body the stimulus lands.
 
         # --- gas sensing ---
         o2 = env.oxygen
@@ -229,10 +229,9 @@ class SensorySystem:
         """Inject mechanosensory current according to where the animal was touched.
 
         Each receptive field contributes in proportion to how much of it the
-        poke lands inside. Nothing here decides what the animal does about it:
-        the current goes into the real touch neurons and the consequence comes
-        out of the connectome, which is why a head poke reverses and a tail
-        poke accelerates without either being written down anywhere.
+        poke lands inside. This only decides which cells hear the stimulus; the
+        behavioural consequence comes out of the connectome, which is why a head
+        poke reverses and a tail poke accelerates.
         """
         per_modality: dict[str, float] = {}
         pokes = env.active_pokes()

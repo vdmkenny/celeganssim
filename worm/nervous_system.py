@@ -43,23 +43,17 @@ MEASURED_REST: dict[str, float] = {
 class NeuralParams:
     """Units: mV, nS, pF, ms.
 
-    Values follow the Kunert/Shlizerman reference implementation
-    (github.com/shlizee/C-elegans-Neural-Interactome), which is Kunert et al.
-    2014 with a uniform 1.5x time rescale so the membrane time constant lands
-    on the 150 ms that Wicks et al. 1996 derived from cell geometry.
+    Synaptic form and rate constants follow Kunert et al. 2014; passive
+    properties and reversal potentials follow direct patch-clamp measurement
+    in C. elegans, cited per parameter below.
 
-    Two easy unit traps, both of which bite hard:
-      * a_r and a_d are published per SECOND. Read as per-millisecond they run
-        synapses a thousand times too fast and the network loses its dynamics.
-      * one synaptic contact should be about 10x the leak conductance
-        (100 pS vs 10 pS). Making them equal guts the network's recurrence.
+    Note a_r and a_d are published per second and are written here per
+    millisecond to match the timebase.
     """
 
-    # Passive properties, corrected against measurement. The Kunert values
-    # (G_leak 0.01 nS, E_cell -35 mV) imply a 150 GOhm input resistance; real
-    # identified C. elegans neurons measure 1.6-8 GOhm, giving a leak nearer
-    # 0.25 nS. E_leak follows the AWA fit, which is the best-constrained set in
-    # the literature.
+    # Passive properties. Identified C. elegans neurons have an input
+    # resistance of 1.6-8 GOhm and a capacitance under 4 pF, giving a membrane
+    # time constant of a few milliseconds.
     # Refs: Goodman, Hall, Avery & Lockery 1998 Neuron 20:763 (R_in 2-8 GOhm,
     # C_m < 4 pF); Shindou et al. 2019 Sci Rep 9:3430 (R_in 1.6-2.2 GOhm);
     # Liu, Kidd, Dobosiewicz & Bargmann 2018 Cell 175:57 Table S4 (g_L 0.25 nS,
@@ -67,10 +61,9 @@ class NeuralParams:
     C = 1.5           # membrane capacitance, pF
     G_leak = 0.25     # leak conductance, nS  -> tau_m = C/G = 6 ms
     E_cell = -65.0    # leak reversal potential, mV
-    # Kunert uses 100 pS per anatomical CONTACT, but measured whole-cell
-    # coupling between a pair is 56 pS (AVAL-AVAR) to 60-95 pS one-way
-    # (AVA-VA5) across ALL their contacts together. Since AVAL and AVAR share
-    # 18 contacts, 100 pS each would give 1.8 nS, roughly 30x the measurement.
+    # Per anatomical contact. Measured coupling is reported whole-cell across
+    # all the contacts a pair shares: 56 pS for AVAL-AVAR (18 contacts) and
+    # 60-95 pS one-way for AVA-VA5, so a single contact is a few pS.
     # Refs: Liu, Chen & Wang 2020 Nat Commun 11:5076; Liu et al. 2017 Nat
     # Commun 8:14818.
     g_gap = 0.005     # conductance of one gap-junction contact, nS (5 pS)
@@ -83,29 +76,22 @@ class NeuralParams:
 
     # --- intrinsic oscillator currents (motor neurons only) ---
     #
-    # The leak-plus-synapse model above is a pure relaxation system: it can only
-    # settle to fixed points, never oscillate. But A-class motor neurons ARE
-    # intrinsic oscillators, and are sufficient to drive backward locomotion
-    # with the premotor interneurons removed entirely (Gao et al. 2018 eLife
-    # 7:e29915). That oscillation needs the P/Q/N-type calcium channel UNC-2.
+    # A-class motor neurons are intrinsic oscillators, sufficient to drive
+    # backward locomotion with the premotor interneurons removed, and that
+    # oscillation depends on the P/Q/N-type calcium channel UNC-2 (Gao et al.
+    # 2018 eLife 7:e29915). These are a Morris-Lecar pair modelling it: a fast
+    # regenerative calcium conductance and a slow potassium conductance, so a
+    # cell is quiescent until premotor drive depolarises it.
     #
-    # So motor neurons get a Morris-Lecar style pair: a fast regenerative
-    # calcium conductance for the upstroke and a slow potassium conductance for
-    # the downstroke. Below threshold the cell is quiescent; depolarise it (as
-    # AVB does through its gap junctions) and it oscillates. That gating is the
-    # point -- the premotor interneurons set state, they do not generate rhythm.
-    #
-    # Refs: Gao et al. 2018 (A-class oscillators, UNC-2 dependent); Liu et al.
-    # 2018 Cell 175:57 and Jiang et al. 2022 (regenerative calcium currents and
-    # action-potential-like events in C. elegans neurons); Morris & Lecar 1981.
+    # Values are not measured and the currents are disabled by default; see
+    # NervousSystem.intrinsic and docs/emergent-cpg.md.
+    # Refs: Liu et al. 2018 Cell 175:57 and Jiang et al. 2022 (regenerative
+    # calcium in C. elegans neurons); Morris & Lecar 1981.
     g_Ca = 0.28       # regenerative calcium conductance, nS
-    # +120 mV is the mammalian textbook figure and appears in the C. elegans
-    # literature only as a FITTED parameter (Liu et al. 2018 AWA model). The
-    # measured reversal is far lower: +50 to +59 mV in body-wall muscle at 6 mM
-    # external Ca (Jospin et al. 2002 J Cell Biol 159:337) and +21 mV in ASER at
-    # 1 mM (Goodman et al. 1998). Using +120 overstates the driving force at
-    # -40 mV by 1.7x, which a regenerative conductance turns into runaway
-    # depolarisation.
+    # Measured calcium reversal in C. elegans: +50 to +59 mV in body-wall
+    # muscle at 6 mM external Ca (Jospin et al. 2002 J Cell Biol 159:337) and
+    # +21 mV in ASER at 1 mM (Goodman et al. 1998). The +120 mV textbook value
+    # does not apply to this animal.
     E_Ca = 60.0       # calcium reversal potential, mV
     V_Ca = -25.0      # half-activation of the calcium conductance, mV
     k_Ca = 7.0        # its steepness, mV
@@ -143,11 +129,10 @@ class NervousSystem:
         for name in conn.names:
             if conn.cell_info[name].get("vnc_class") in ("DA", "DB", "VA", "VB", "AS"):
                 self.osc_mask[conn.index[name]] = True
-        # OFF by default: the parameters above do not yet produce a
-        # physiological oscillation (a parameter search over g_Ca, g_K, their
-        # half-activations and tau_w found no regime with a realistic voltage
-        # swing), so this stays disabled until the biophysics is pinned down
-        # against measured values. See docs/emergent-cpg.md.
+        # Disabled: no parameter regime for these currents produces a
+        # physiological voltage swing, so the locomotor rhythm comes from the
+        # ventral cord oscillator in body.py. See docs/emergent-cpg.md for the
+        # measured values a working version needs.
         self.intrinsic = False
 
         # Per-cell leak reversal. A and B class motor neurons rest 19 mV apart,
@@ -255,12 +240,10 @@ class NervousSystem:
     def calibrate_rest(self, iterations: int = 40) -> None:
         """Set E_leak so measured cells rest where they were measured to rest.
 
-        The published resting potential of VA5 is the potential of an intact
-        animal, synaptic input included, so simply assigning it as E_leak
-        overshoots: the network then pulls the cell somewhere else entirely.
-        The right question is the inverse one, what leak reversal puts the
-        SOLVED equilibrium on the measured value, and because the equilibrium
-        is linear in E_leak a few fixed-point steps converge on it.
+        A published resting potential is that of an intact animal with its
+        synaptic input intact, so the quantity to match is the solved network
+        equilibrium rather than the leak reversal itself. Since that
+        equilibrium is linear in E_leak, a few fixed-point steps converge.
 
         Cells without a measurement are untouched.
         """

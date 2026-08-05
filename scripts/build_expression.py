@@ -1,15 +1,13 @@
 """Cache CeNGEN single-cell expression for the genes the simulator models.
 
-This is what stops the genetics layer from being a lookup table with a hand
-written multiplier next to it. CeNGEN is measured single-cell RNA-seq across
-128 neuron classes (Taylor et al. 2021 Cell 184:4329), reached through the
-wormneuroatlas API (Randi et al. 2023 Nature 623:406). With it, knocking out a
-gene affects exactly the cells that express it rather than scaling a
+CeNGEN is measured single-cell RNA-seq across 128 neuron classes (Taylor et al.
+2021 Cell 184:4329), reached through the wormneuroatlas API (Randi et al. 2023
+Nature 623:406). It determines which cells a gene knockout reaches, so an effect
+lands only on the cells that transcribe the gene rather than scaling a
 transmitter everywhere.
 
-The payoff is that several things previously hand-coded now fall out of data:
-mec-4 is simply not expressed in PVD or FLP, so harsh touch survives a mec-4
-knockout without anyone writing a rule saying it should.
+Consequences follow from the data rather than from rules: mec-4 is not expressed
+in PVD or FLP, so harsh touch survives a mec-4 knockout.
 
 Run once; the result is cached to data/processed/expression.json so the
 simulator never needs wormneuroatlas at runtime.

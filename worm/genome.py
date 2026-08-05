@@ -1,14 +1,16 @@
-"""The genome layer: real WBcel235 annotation, wired to simulator parameters.
+"""The genome layer: WBcel235 annotation as a control surface.
 
-The point of loading 100 Mb of real sequence annotation into a behaviour
-simulator is that gene names become a control surface. `GENE_EFFECTS` below maps
-a curated set of genes onto the subsystems their products actually implement, so
-knocking out `unc-25` removes GABA synthesis, which removes cross-inhibition at
-the neuromuscular junction, which makes the model worm coil -- the same causal
-chain as in the animal.
+Gene lookup resolves a name to its WormBase ID, chromosome and coordinates.
+`GENE_EFFECTS` maps a curated set of loci onto the subsystems their products
+implement, so knocking out `unc-25` removes GABA synthesis, which removes
+inhibition at the neuromuscular junction, which makes the animal hypercontract.
 
-Every entry cites the phenotype it is modelling. Effects are deliberately coarse:
-this is a behavioural model, not a molecular one.
+Where CeNGEN single-cell expression is available (data/processed/expression.json)
+an effect reaches only the cells measured to transcribe the gene; otherwise it
+applies globally.
+
+Effects are coarse by design: this is a behavioural model, not a molecular one.
+Each entry cites the phenotype it reproduces.
 """
 
 from __future__ import annotations
@@ -317,9 +319,8 @@ class Genome:
         genes = json.loads((d / "genes.json").read_text())
         stats = json.loads((d / "genome_stats.json").read_text())
         g = cls(genes, stats)
-        # Optional: measured single-cell expression, which makes knockouts
-        # cell-specific instead of global. Absent, everything still works, just
-        # more coarsely.
+        # Measured single-cell expression makes knockouts cell-specific.
+        # Optional: without it effects apply globally.
         exp_path = d / "expression.json"
         if exp_path.exists():
             payload = json.loads(exp_path.read_text())
@@ -342,9 +343,9 @@ class Genome:
     def nt_scale_in_cell(self, neurotransmitter: str, cell: str) -> float:
         """Transmitter scaling for one cell, honouring where genes are expressed.
 
-        This is the difference between "unc-25 removes GABA" and "unc-25 removes
-        GABA from the 28 cells that actually transcribe it". With CeNGEN loaded,
-        a knockout reaches exactly the cells the gene is measured in.
+        A knockout reaches exactly the cells CeNGEN measures the gene in, so
+        `unc-25` silences GABA in the 28 cells that transcribe it rather than
+        everywhere.
         """
         scale = 1.0
         for g in sorted(self.knockouts):
@@ -360,10 +361,9 @@ class Genome:
     def sensory_scale_in_cells(self, modality_key: str, cells) -> float:
         """Sensory gating, restricted to genes expressed in the sensing cells.
 
-        A gene only gates a modality if it is actually transcribed in at least
-        one of the cells carrying it. That is what makes harsh touch survive a
-        mec-4 knockout without a special case: MEC-4 is simply not expressed in
-        PVD or FLP.
+        A gene gates a modality only if it is transcribed in at least one of
+        the cells carrying it, so harsh touch survives a `mec-4` knockout
+        because MEC-4 is not expressed in PVD or FLP.
         """
         cells = set(cells)
         scale = 1.0
