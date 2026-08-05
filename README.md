@@ -3,6 +3,17 @@
 A whole-organism simulator for *Caenorhabditis elegans*, built on the real genome
 and the real wiring diagram.
 
+![The live viewer: an adult worm crawling, with dorsal and ventral body-wall
+muscle activation drawn along the body, the travelling wave of muscle drive from
+head to tail, and live command-neuron
+activity](docs/screenshot.png)
+
+*The live viewer. Teal is dorsal muscle, purple is ventral; the alternation you
+can see running down the body is the undulatory wave that moves the animal. The
+muscle drive panel shows the same wave as a strip from head to tail, and the
+command neurons below it are the AVB/PVC and AVA/AVD/AVE pools whose balance
+decides whether the worm goes forwards or backwards.*
+
 The animal's 100,286,401 bp genome is loaded from the actual reference assembly.
 Its nervous system is the actual electron-microscopy connectome: 300 neurons and
 95 body-wall muscles, 4,681 chemical synapse pairs and 1,342 gap junctions. Those

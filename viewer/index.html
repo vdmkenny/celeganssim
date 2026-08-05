@@ -53,7 +53,7 @@
   .bar>i{display:block;height:100%;background:var(--accent);transition:width .1s}
   select,input[type=text]{background:#1a2130;color:var(--ink);border:1px solid var(--line);
     border-radius:5px;padding:5px;font:inherit;font-size:11.5px;width:100%}
-  input[type=range]{width:100%}
+  input[type=range]{width:100%;accent-color:var(--accent);height:14px}
   .ko{display:inline-block;background:#3a1d22;border:1px solid var(--bad);color:#ffb3b8;
     border-radius:4px;padding:2px 6px;margin:2px 3px 2px 0;font-size:11px;cursor:pointer}
   #pheno{color:var(--dim);font-size:11px;margin-top:7px;min-height:30px;
@@ -231,6 +231,27 @@ function screenToWorld(sx, sy, r){
 function perp(a,b){ const dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy)||1;
   return [-dy/L, dx/L]; }
 
+// The arena is toroidal, so a worm leaving one edge reappears at the other.
+// Drawing that as one polyline lays a straight line right across the view, so
+// break the path wherever consecutive samples jump more than half the arena.
+function strokeTrail(ctx, trail, env, project){
+  if(!trail || trail.length<2) return;
+  const hx=env.width/2, hy=env.height/2;
+  ctx.beginPath();
+  let pen=false;
+  for(let i=0;i<trail.length;i++){
+    const p=trail[i];
+    if(i>0){
+      const q=trail[i-1];
+      if(Math.abs(p[0]-q[0])>hx || Math.abs(p[1]-q[1])>hy) pen=false;
+    }
+    const [x,y]=project(p);
+    pen ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+    pen=true;
+  }
+  ctx.stroke();
+}
+
 function drawWorm(ctx, nodes, radius, dorsal, ventral, s, cx, cy){
   const N = nodes.length;
   const px = nodes.map(p => [ (p[0]-cam[0])*s + cx, (p[1]-cam[1])*s + cy ]);
@@ -278,8 +299,10 @@ function drawSources(ctx, env, s, cx, cy){
     const col = src.kind==='repellent' ? '226,86,95'
               : src.kind==='food'      ? '191,163,106'
               : '90,209,196';
-    // Lawn opacity tracks how much is left, so grazing is visible.
-    const a0 = src.kind==='food' ? 0.34*Math.min(1,src.strength) : 0.30;
+    // Lawn opacity tracks how much is left, so grazing is visible. Kept low
+    // because at this zoom a lawn fills the whole frame, and a heavy fill
+    // buries the grid and the worm along with it.
+    const a0 = src.kind==='food' ? 0.20*Math.min(1,src.strength) : 0.26;
     g.addColorStop(0,`rgba(${col},${a0})`); g.addColorStop(1,`rgba(${col},0)`);
     ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,R,0,7); ctx.fill();
   }
@@ -313,10 +336,7 @@ function render(){
   drawSources(mctx,f.env,s,cx,cy);
   // trail
   mctx.strokeStyle='rgba(255,212,121,.30)'; mctx.lineWidth=1.4*dpr;
-  mctx.beginPath();
-  f.trail.forEach((p,i)=>{ const x=(p[0]-cam[0])*s+cx, y=(p[1]-cam[1])*s+cy;
-    i?mctx.lineTo(x,y):mctx.moveTo(x,y); });
-  mctx.stroke();
+  strokeTrail(mctx, f.trail, f.env, p => [(p[0]-cam[0])*s+cx, (p[1]-cam[1])*s+cy]);
   drawWorm(mctx,nodes,f.radius,f.dorsal,f.ventral,s,cx,cy);
 
   // scale bar: 1 mm
@@ -342,9 +362,8 @@ function drawMini(f){
     nctx.fillStyle = src.kind==='repellent'?'rgba(226,86,95,.5)':'rgba(90,209,196,.5)';
     nctx.beginPath(); nctx.arc(ox+src.x*s,oy+src.y*s,Math.max(2,src.sigma*s*.5),0,7); nctx.fill();
   }
-  nctx.strokeStyle='rgba(255,212,121,.5)'; nctx.lineWidth=1; nctx.beginPath();
-  f.trail.forEach((p,i)=>{const x=ox+p[0]*s,y=oy+p[1]*s; i?nctx.lineTo(x,y):nctx.moveTo(x,y);});
-  nctx.stroke();
+  nctx.strokeStyle='rgba(255,212,121,.5)'; nctx.lineWidth=1;
+  strokeTrail(nctx, f.trail, e, p => [ox+p[0]*s, oy+p[1]*s]);
   const t=f.telemetry;
   nctx.fillStyle='#ffd479'; nctx.beginPath(); nctx.arc(ox+t.x*s,oy+t.y*s,3,0,7); nctx.fill();
   nctx.fillStyle='rgba(139,152,173,.8)'; nctx.font='10px ui-monospace,monospace';
