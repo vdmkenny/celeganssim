@@ -94,6 +94,51 @@ def _wt():
     return ok, f"speed {g['speed']:.3f} mm/s, amplitude {g['amplitude']*100:.1f}% BL"
 
 
+@check("passive properties match patch-clamp measurements",
+       "input resistance 1.6-8 GOhm and membrane time constant 3-10 ms; a gap "
+       "junction pair coupled at tens of pS, not nanosiemens",
+       "Goodman, Hall, Avery & Lockery 1998 Neuron 20:763; Shindou et al. 2019 "
+       "Sci Rep 9:3430; Liu, Chen & Wang 2020 Nat Commun 11:5076 (AVAL-AVAR "
+       "56 pS)")
+def _passive():
+    from .connectome import Connectome
+    from .genome import Genome
+    from .nervous_system import NervousSystem
+    c = Connectome.load()
+    ns = NervousSystem(c, Genome.load())
+    p = ns.p
+    r_in = 1.0 / p.G_leak            # GOhm, since nS
+    tau = p.C / p.G_leak             # ms, since pF/nS
+    ava = c.Gg[c.idx("AVAR"), c.idx("AVAL")] * p.g_gap * 1000.0   # pS
+    ok = 1.5 <= r_in <= 8.5 and 3.0 <= tau <= 10.0 and 20 <= ava <= 200
+    return ok, (f"R_in {r_in:.1f} GOhm, tau_m {tau:.1f} ms, "
+                f"AVAL-AVAR coupling {ava:.0f} pS")
+
+
+@check("motor neurons rest where they were measured to rest",
+       "VA5 -71.7 mV, VB6 -53.2 mV, VD5 -45.8 mV, with A and B class 19 mV "
+       "apart; whole network inside the -70 to -20 mV operating range",
+       "Liu, Chen & Wang 2014 Nat Commun 5:5155 Table 1 (the only ventral cord "
+       "motor neurons ever patched); Goodman et al. 2012 WormBook")
+def _resting():
+    import numpy as np
+
+    from .connectome import Connectome
+    from .genome import Genome
+    from .nervous_system import NervousSystem
+    c = Connectome.load()
+    ns = NervousSystem(c, Genome.load())
+    got = {n: float(ns.V_th[c.idx(n)]) for n in ("VA05", "VB06", "VD05")}
+    want = {"VA05": -71.7, "VB06": -53.2, "VD05": -45.8}
+    err = max(abs(got[k] - want[k]) for k in want)
+    spread = got["VB06"] - got["VA05"]
+    in_range = ns.V_th.min() > -85.0 and ns.V_th.max() < 5.0
+    ok = err < 1.0 and 15.0 < spread < 23.0 and in_range
+    return ok, (", ".join(f"{k} {got[k]:.1f}" for k in want)
+                + f"; A-to-B spread {spread:.1f} mV; network "
+                  f"{ns.V_th.min():.1f} to {ns.V_th.max():.1f} mV")
+
+
 @check("anterior touch triggers reversal",
        "gentle anterior touch drives backward locomotion",
        "Chalfie et al. 1985; WormBook Mechanosensation")

@@ -44,7 +44,7 @@ loci, and that part is modelled, not derived.
 
 ```bash
 python -m worm serve                    # live viewer at http://127.0.0.1:8080
-python -m worm validate                 # 21 checks against published results
+python -m worm validate                 # 23 checks against published results
 python -m worm assay chemotaxis         # run a standard behavioural assay
 python -m worm gene unc-25              # look up a locus
 ```
@@ -171,11 +171,27 @@ parameter: it is solved as a linear system so the resting network sits at its ow
 equilibrium with every synapse half-activated. Without that, a network with this
 much heterogeneous recurrence saturates immediately.
 
-**It makes checkable predictions.** `python -m worm validate` runs 21 checks
-against published results, and all 21 pass.
+The passive properties are measured, not inherited. The Kunert leak of 0.01 nS
+implies a 150 GOhm input resistance; real neurons patch at 1.6 to 8 GOhm, so it
+is 0.25 nS here. And a gap junction contact is 5 pS rather than 100 pS, because
+measured whole-cell coupling between AVAL and AVAR is 56 pS across all eighteen
+of their contacts together, not per contact.
+
+Resting potentials are calibrated rather than assigned. A published resting
+potential is that of an intact animal with its synapses working, so setting it
+as a leak reversal overshoots. Instead the leak reversal is solved so the
+network's own equilibrium lands on the measurement: VA5 at -71.7 mV and VB6 at
+-53.2 mV, 19 mV apart, exactly as patched.
+
+**It makes checkable predictions.** `python -m worm validate` runs 23 checks
+against published results, and all 23 pass.
 
 | Check | Model | Published |
 |---|---|---|
+| Input resistance | 4.0 GOhm | 1.6 to 8 GOhm |
+| Membrane time constant | 6.0 ms | 3 to 10 ms |
+| AVAL-AVAR gap coupling | 90 pS | 56 pS |
+| VA5 / VB6 resting potential | -71.7 / -53.2 mV | -71.7 / -53.2 mV |
 | Crawling speed | 0.239 mm/s | 0.20 ± 0.04 mm/s |
 | Undulation amplitude | 21.2% body length | 19.3% |
 | Embryogenesis | 14.2 h | 14.2 h |
@@ -220,7 +236,7 @@ Body                 ventral-cord oscillator → 95 muscles → viscoelastic bod
 | `worm/lifecycle.py` | Embryo, larval stages, dauer, feeding, senescence, death |
 | `worm/simulation.py` | Closed loop and escape-response state machine |
 | `worm/assays.py` | Standard behavioural assays with published reference values |
-| `worm/validate.py` | 21 checks against the literature |
+| `worm/validate.py` | 23 checks against the literature |
 | `worm/server.py` + `viewer/` | Live browser viewer (standard library only) |
 
 ---
@@ -272,7 +288,12 @@ extents. Developmental timings, body sizes, brood size, lifespan.
 
 **Deliberate approximations, stated plainly:**
 
-- **The locomotor rhythm is generated explicitly**, not by the connectome. Its
+- **The locomotor rhythm is generated explicitly**, not by the connectome. See
+  [docs/emergent-cpg.md](docs/emergent-cpg.md) for an attempt at making it
+  emergent, why it failed, and the measured parameters a second attempt should
+  use. Worth knowing: OpenWorm's c302 does not produce locomotion emergently
+  either, and its forward-locomotion demo hand-schedules current into individual
+  muscles. Its
   amplitude, direction, frequency and dorsoventral balance are all set by the
   network, but the oscillator itself is modelled. This is the standard choice in
   whole-animal models (Boyle & Cohen 2012; Olivares et al. 2021): the wiring

@@ -28,6 +28,18 @@ from .connectome import Connectome
 from .genome import Genome
 
 
+# Measured resting potentials of ventral cord motor neurons, whole-cell current
+# clamp in situ (Liu, Chen & Wang 2014 Nat Commun 5:5155, Table 1). VA5, VB6 and
+# VD5 are the ONLY ventral cord motor neurons ever patched; DA, DB, DD and AS
+# have never been recorded, so they inherit their functional partner's value and
+# that is an assumption.
+MEASURED_REST: dict[str, float] = {
+    "VA": -71.7, "DA": -71.7,     # A class, backward
+    "VB": -53.2, "DB": -53.2,     # B class, forward (19 mV depolarised of A)
+    "VD": -45.8, "DD": -45.8,     # D class, GABAergic
+}
+
+
 class NeuralParams:
     """Units: mV, nS, pF, ms.
 
@@ -43,10 +55,25 @@ class NeuralParams:
         (100 pS vs 10 pS). Making them equal guts the network's recurrence.
     """
 
+    # Passive properties, corrected against measurement. The Kunert values
+    # (G_leak 0.01 nS, E_cell -35 mV) imply a 150 GOhm input resistance; real
+    # identified C. elegans neurons measure 1.6-8 GOhm, giving a leak nearer
+    # 0.25 nS. E_leak follows the AWA fit, which is the best-constrained set in
+    # the literature.
+    # Refs: Goodman, Hall, Avery & Lockery 1998 Neuron 20:763 (R_in 2-8 GOhm,
+    # C_m < 4 pF); Shindou et al. 2019 Sci Rep 9:3430 (R_in 1.6-2.2 GOhm);
+    # Liu, Kidd, Dobosiewicz & Bargmann 2018 Cell 175:57 Table S4 (g_L 0.25 nS,
+    # E_L -65 mV, C 1.5 pF).
     C = 1.5           # membrane capacitance, pF
-    G_leak = 0.01     # leak conductance, nS  -> tau_m = C/G = 150 ms
-    E_cell = -35.0    # leak reversal / resting potential, mV
-    g_gap = 0.1       # conductance of one gap-junction contact, nS (100 pS)
+    G_leak = 0.25     # leak conductance, nS  -> tau_m = C/G = 6 ms
+    E_cell = -65.0    # leak reversal potential, mV
+    # Kunert uses 100 pS per anatomical CONTACT, but measured whole-cell
+    # coupling between a pair is 56 pS (AVAL-AVAR) to 60-95 pS one-way
+    # (AVA-VA5) across ALL their contacts together. Since AVAL and AVAR share
+    # 18 contacts, 100 pS each would give 1.8 nS, roughly 30x the measurement.
+    # Refs: Liu, Chen & Wang 2020 Nat Commun 11:5076; Liu et al. 2017 Nat
+    # Commun 8:14818.
+    g_gap = 0.005     # conductance of one gap-junction contact, nS (5 pS)
     g_syn = 0.1       # conductance of one chemical synaptic contact, nS
     E_exc = 0.0       # excitatory reversal potential, mV
     E_inh = -48.0     # inhibitory reversal potential, mV (Wicks Table 1)
@@ -72,7 +99,14 @@ class NeuralParams:
     # 2018 Cell 175:57 and Jiang et al. 2022 (regenerative calcium currents and
     # action-potential-like events in C. elegans neurons); Morris & Lecar 1981.
     g_Ca = 0.28       # regenerative calcium conductance, nS
-    E_Ca = 120.0      # calcium reversal potential, mV
+    # +120 mV is the mammalian textbook figure and appears in the C. elegans
+    # literature only as a FITTED parameter (Liu et al. 2018 AWA model). The
+    # measured reversal is far lower: +50 to +59 mV in body-wall muscle at 6 mM
+    # external Ca (Jospin et al. 2002 J Cell Biol 159:337) and +21 mV in ASER at
+    # 1 mM (Goodman et al. 1998). Using +120 overstates the driving force at
+    # -40 mV by 1.7x, which a regenerative conductance turns into runaway
+    # depolarisation.
+    E_Ca = 60.0       # calcium reversal potential, mV
     V_Ca = -25.0      # half-activation of the calcium conductance, mV
     k_Ca = 7.0        # its steepness, mV
     g_K = 0.55        # slow potassium conductance, nS
@@ -115,6 +149,18 @@ class NervousSystem:
         # swing), so this stays disabled until the biophysics is pinned down
         # against measured values. See docs/emergent-cpg.md.
         self.intrinsic = False
+
+        # Per-cell leak reversal. A and B class motor neurons rest 19 mV apart,
+        # so treating them as interchangeable is wrong. These are the only
+        # ventral cord motor neurons ever patched; every other cell keeps the
+        # generic value and that is an inference, not a measurement.
+        # Ref: Liu, Chen & Wang 2014 Nat Commun 5:5155, Table 1.
+        self.E_leak = np.full(self.n, self.p.E_cell)
+        self._rest_targets = {}
+        for name in conn.names:
+            cls = conn.cell_info[name].get("vnc_class")
+            if cls in MEASURED_REST:
+                self._rest_targets[conn.index[name]] = MEASURED_REST[cls]
 
         self._apply_genetics()
         self.reset()
@@ -199,14 +245,44 @@ class NervousSystem:
 
         diag = p.G_leak + Gg.sum(axis=1) + s_eq * Gs.sum(axis=1)
         A = np.diag(diag) - Gg
-        b = p.G_leak * p.E_cell + s_eq * (Gs * self.E_syn).sum(axis=1)
+        b = p.G_leak * self.E_leak + s_eq * (Gs * self.E_syn).sum(axis=1)
 
         try:
             return np.linalg.solve(A, b)
         except np.linalg.LinAlgError:
             return np.linalg.lstsq(A, b, rcond=None)[0]
 
+    def calibrate_rest(self, iterations: int = 40) -> None:
+        """Set E_leak so measured cells rest where they were measured to rest.
+
+        The published resting potential of VA5 is the potential of an intact
+        animal, synaptic input included, so simply assigning it as E_leak
+        overshoots: the network then pulls the cell somewhere else entirely.
+        The right question is the inverse one, what leak reversal puts the
+        SOLVED equilibrium on the measured value, and because the equilibrium
+        is linear in E_leak a few fixed-point steps converge on it.
+
+        Cells without a measurement are untouched.
+        """
+        if not self._rest_targets:
+            return
+        idx = np.array(sorted(self._rest_targets))
+        target = np.array([self._rest_targets[i] for i in idx])
+        for _ in range(iterations):
+            V = self._solve_thresholds()
+            err = target - V[idx]
+            if np.abs(err).max() < 0.05:
+                break
+            # dV/dE_leak is G_leak/G_total; step by the inverse of that.
+            Gg = self.Gg_eff * self.p.g_gap
+            Gs = self.Gs_eff * self.p.g_syn
+            G_tot = (self.p.G_leak + Gg.sum(axis=1)
+                     + self.s_eq * Gs.sum(axis=1))[idx]
+            self.E_leak[idx] += err * (G_tot / self.p.G_leak)
+        self.V_th = self._solve_thresholds()
+
     def reset(self) -> None:
+        self.calibrate_rest()
         self.V_th = self._solve_thresholds()
         self.V = self.V_th.copy()
         self.s = np.full(self.n, self.s_eq)
@@ -237,7 +313,7 @@ class NervousSystem:
         gs_active = Gs * s[np.newaxis, :]
         I_syn = V * gs_active.sum(axis=1) - (gs_active * self.E_syn).sum(axis=1)
 
-        dV = (-p.G_leak * (V - p.E_cell) - I_gap - I_syn + I_ext) / p.C
+        dV = (-p.G_leak * (V - self.E_leak) - I_gap - I_syn + I_ext) / p.C
         phi = self._sigmoid(p.beta * (V - self.V_th))
         ds = p.a_r * phi * (1.0 - s) - p.a_d * s
         return dV, ds
@@ -260,7 +336,7 @@ class NervousSystem:
         gs_active = Gs * s[np.newaxis, :]
         # Coefficient of V_i in its own current balance, and everything else.
         G_tot = p.G_leak + Gg.sum(axis=1) + gs_active.sum(axis=1)
-        drive = (p.G_leak * p.E_cell + Gg @ V
+        drive = (p.G_leak * self.E_leak + Gg @ V
                  + (gs_active * self.E_syn).sum(axis=1) + I_ext)
 
         if self.intrinsic:
