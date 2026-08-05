@@ -155,6 +155,30 @@ class WormSimulation:
                 "distance_mm": round(float(dist[i]), 3),
                 "harsh": bool(strength > 1.5 if harsh is None else harsh)}
 
+    def _pool_intact(self, idx: np.ndarray) -> float:
+        """Fraction of a named cell pool that has not been ablated."""
+        if not len(idx) or not self.ns.ablated:
+            return 1.0
+        dead = set(self.ns._ablated_idx.tolist())
+        alive = sum(1 for i in idx.tolist() if i not in dead)
+        return alive / len(idx)
+
+    # -- ablation -------------------------------------------------------
+    def ablate(self, name: str) -> dict:
+        if name not in self.conn.index:
+            raise KeyError(f"{name!r} is not a cell in this connectome")
+        self.ns.ablate(name)
+        info = self.conn.cell_info[name]
+        return {"cell": name, "kind": info["kind"],
+                "roles": info.get("roles") or [],
+                "ablated": sorted(self.ns.ablated)}
+
+    def restore_cell(self, name: str) -> None:
+        self.ns.restore_cell(name)
+
+    def clear_ablations(self) -> None:
+        self.ns.clear_ablations()
+
     # -- genetics -------------------------------------------------------
     def knock_out(self, gene: str) -> dict:
         rec = self.genome.knock_out(gene)
@@ -213,6 +237,15 @@ class WormSimulation:
         # Motor pools: baseline forward drive plus what the network is saying.
         drive_B = float(np.mean(act[self.i_B])) - 0.5
         drive_A = float(np.mean(act[self.i_A])) - 0.5
+
+        # The tonic term stands in for baseline AVB output driving the B-class
+        # motor neurons. It has to depend on those cells still existing, or
+        # ablating the forward command pair would leave the animal cruising
+        # along regardless -- and co-ablating AVB and PVC is precisely the
+        # experiment that abolishes forward locomotion (Chalfie et al. 1985).
+        fwd_ok = self._pool_intact(self.i_fwd) * self._pool_intact(self.i_B)
+        bwd_ok = self._pool_intact(self.i_bwd) * self._pool_intact(self.i_A)
+
         forward = cfg.tonic_forward + cfg.command_gain * (fwd_cmd + drive_B)
         backward = cfg.command_gain * (bwd_cmd + drive_A)
 
@@ -220,6 +253,12 @@ class WormSimulation:
             forward, backward = 0.05, 0.95
         elif self.state.behavior == "omega":
             forward, backward = 0.85, 0.05
+
+        # Apply ablation AFTER the state machine, so killing a command pool
+        # silences its motor programme outright rather than being overwritten
+        # by the state override a line above.
+        forward *= fwd_ok
+        backward *= bwd_ok
 
         # Clip to the physiological range FIRST. Weakening the synapses drives
         # the motor pools toward saturation, so scaling before clipping would
@@ -247,6 +286,11 @@ class WormSimulation:
         slow *= self.life.locomotion_scale()
         forward *= slow
         backward *= slow
+        # Drive alone is not enough: above a total of 1.0 the oscillator's
+        # amplitude term saturates, so a 20% cut in drive can vanish entirely.
+        # Slowing on food and senescent decline are reductions in locomotion
+        # RATE, so they also have to reach the undulation frequency.
+        rate_scale = slow
 
         head_bias = self._head_bias(act, turn_cmd)
 
@@ -254,7 +298,8 @@ class WormSimulation:
         self.body.step_oscillator(
             dt, forward_drive=forward, backward_drive=backward,
             gaba_scale=float(np.clip(gaba, 0.0, 1.0)),
-            head_bias=head_bias, arousal=float(np.clip(arousal, 0.3, 2.0)))
+            head_bias=head_bias,
+            arousal=float(np.clip(arousal, 0.3, 2.0) * max(rate_scale, 0.05)))
         self._drive_muscles()
 
         prev = self.body.X.copy()
@@ -394,6 +439,7 @@ class WormSimulation:
             "distance_mm": round(self.state.distance, 3),
             "sensory": {k: round(v, 3) for k, v in self.sensory.last.items() if v},
             "knockouts": sorted(self.genome.knockouts),
+            "ablated": sorted(self.ns.ablated),
             "life": self.life.summary(),
             "events": self.events[-6:],
         }

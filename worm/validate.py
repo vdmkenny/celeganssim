@@ -290,6 +290,52 @@ def _swim():
         f"(low drag ratio gives less thrust per stroke)"
 
 
+@check("ablating the command interneurons reproduces their ablation phenotypes",
+       "killing AVB+PVC abolishes forward locomotion while leaving reversals; "
+       "killing AVA+AVD+AVE abolishes the touch-evoked reversal; killing "
+       "ALM+AVM removes anterior touch sensitivity",
+       "Chalfie et al. 1985 J Neurosci 5:956; Zheng et al. 1999; "
+       "Zhen & Samuel 2015 review")
+def _ablation():
+    import numpy as np
+
+    def drives(cells):
+        s = _sim(seed=0)
+        for c in cells:
+            s.ablate(c)
+        for _ in range(500):
+            s.step()
+        f = []
+        for _ in range(400):
+            t = s.step()
+            f.append(t["forward_drive"])
+        return float(np.mean(f))
+
+    def touch_after(cells):
+        s = _sim(seed=0)
+        for c in cells:
+            s.ablate(c)
+        for _ in range(500):
+            s.step()
+        r0 = s.state.reversal_count
+        s.env.poke("anterior", 1.0, duration=0.4)
+        for _ in range(150):
+            s.step()
+        return s.state.reversal_count > r0
+
+    intact_f = drives(())
+    no_fwd_f = drives(("AVBL", "AVBR", "PVCL", "PVCR"))
+    no_bwd_touch = touch_after(("AVAL", "AVAR", "AVDL", "AVDR", "AVEL", "AVER"))
+    no_trn_touch = touch_after(("ALML", "ALMR", "AVM"))
+    intact_touch = touch_after(())
+
+    ok = (intact_f > 0.5 and no_fwd_f < 0.05
+          and intact_touch and not no_bwd_touch and not no_trn_touch)
+    return ok, (f"forward drive {intact_f:.2f} intact -> {no_fwd_f:.2f} without "
+                f"AVB/PVC; head-touch reversal: intact {intact_touch}, "
+                f"no AVA/AVD/AVE {no_bwd_touch}, no ALM/AVM {no_trn_touch}")
+
+
 def _run_life(longevity: float = 1.0, temp: float = 20.0, dt: float = 60.0):
     """Run one animal from fertilised egg to death, without the neural sim."""
     from .lifecycle import Lifecycle

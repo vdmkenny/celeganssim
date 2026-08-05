@@ -71,9 +71,33 @@ class NervousSystem:
 
         half = 0.5 * self.p.a_r
         self.s_eq = half / (half + self.p.a_d)
+        self.ablated: set[str] = set()
+        self._ablated_idx = np.array([], dtype=int)
 
         self._apply_genetics()
         self.reset()
+
+    # -- ablation -------------------------------------------------------
+    def ablate(self, name: str) -> None:
+        """Kill a cell, the way a laser microbeam does.
+
+        The cell stops sending and stops receiving: its rows and columns are
+        zeroed in both the chemical and electrical matrices, and it is clamped
+        at its resting potential so it cannot be driven. Mapping circuits by
+        killing cells one at a time is how the touch circuit, the command
+        interneurons and the escape response were all worked out in the first
+        place (Chalfie et al. 1985; Gray, Hill & Bargmann 2005).
+        """
+        self.ablated.add(name)
+        self._apply_genetics()
+
+    def restore_cell(self, name: str) -> None:
+        self.ablated.discard(name)
+        self._apply_genetics()
+
+    def clear_ablations(self) -> None:
+        self.ablated.clear()
+        self._apply_genetics()
 
     # -- genetics -------------------------------------------------------
     def _apply_genetics(self) -> None:
@@ -90,6 +114,21 @@ class NervousSystem:
         self.Gs_eff = self.conn.Gs * scale[np.newaxis, :] * global_syn
         self.Gg_eff = self.conn.Gg.copy()
         self.nt_scale_vec = scale
+
+        # Ablated cells neither send nor receive.
+        if self.ablated:
+            idx = [self.conn.index[n] for n in self.ablated if n in self.conn.index]
+            if idx:
+                self.Gs_eff[idx, :] = 0.0
+                self.Gs_eff[:, idx] = 0.0
+                self.Gg_eff[idx, :] = 0.0
+                self.Gg_eff[:, idx] = 0.0
+        self._ablated_idx = np.array(
+            [self.conn.index[n] for n in self.ablated if n in self.conn.index],
+            dtype=int)
+        # Recompute thresholds so the surviving network still rests at
+        # equilibrium after cells are removed.
+        self.V_th = self._solve_thresholds()
 
     def refresh_genetics(self) -> None:
         """Recompute weights and thresholds after a knockout changes."""
@@ -181,6 +220,9 @@ class NervousSystem:
 
         if noise > 0:
             self.V += self.rng.normal(0.0, noise, self.n)
+        if len(self._ablated_idx):
+            self.V[self._ablated_idx] = self.V_th[self._ablated_idx]
+            self.s[self._ablated_idx] = 0.0
 
     # -- readout --------------------------------------------------------
     def activation(self, idx: np.ndarray | None = None) -> np.ndarray:

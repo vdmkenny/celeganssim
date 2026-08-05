@@ -129,6 +129,16 @@ class SimRunner:
                 if cmd == "clear_sources":
                     env.clear_sources(msg.get("kind"))
                     return {"ok": True, "msg": "cleared sources"}
+                if cmd == "ablate":
+                    rec = sim.ablate(msg["cell"])
+                    return {"ok": True, "record": rec,
+                            "msg": f"ablated {rec['cell']}"}
+                if cmd == "restore_cell":
+                    sim.restore_cell(msg["cell"])
+                    return {"ok": True, "msg": f"{msg['cell']} restored"}
+                if cmd == "clear_ablations":
+                    sim.clear_ablations()
+                    return {"ok": True, "msg": "all cells restored"}
                 if cmd == "knockout":
                     rec = sim.knock_out(msg["gene"])
                     return {"ok": True, "msg": f"{rec['gene']} knocked out",

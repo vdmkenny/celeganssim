@@ -192,6 +192,16 @@ body.network #hud{display:none}
             style="width:100%;margin-top:6px;border:1px solid var(--line);border-radius:5px"></canvas>
 
     </div></details>
+    <details open><summary>Neuron traces<span class="tag" id="tagTrace"></span></summary><div class="body">
+    <div class="sub">activation over the last 30 s, the way a calcium recording reads</div>
+    <canvas id="traces" width="310" height="120"
+            style="width:100%;border:1px solid var(--line);border-radius:5px"></canvas>
+    <div id="tracelist" style="margin-top:6px"></div>
+    <div class="row" style="margin-top:6px">
+      <button onclick="watchPinned()">watch pinned cell</button>
+      <button onclick="watch=[];drawTraces()">clear</button>
+    </div>
+    </div></details>
     <details><summary>Command neurons</summary><div class="body">
     <div class="kv"><span>AVB / PVC (forward)</span><span id="fw">-</span></div>
     <div class="bar"><i id="fwb" style="width:50%"></i></div>
@@ -529,11 +539,13 @@ function drawNetwork(f){
   const P = netLayout(w,h);
   netPts = P;
   const act = (f && f.activity) || null;
+  const deadEdge = new Set((f && f.telemetry && f.telemetry.ablated) || []);
 
   // Edges first, faint, so the nodes read on top.
   for(const [i,j,wt,gap] of graph.edges){
     const a = graph.byIndex[i], b = graph.byIndex[j];
     if(!a || !b) continue;
+    if(deadEdge.has(a.n) || deadEdge.has(b.n)) continue;
     const ai = a.li, bi = b.li;
     const pa = P[ai], pb = P[bi];
     // Presynaptic drive modulates edge brightness, so you can watch signal move.
@@ -556,6 +568,7 @@ function drawNetwork(f){
   // Nodes.
   const focus = (hover >= 0) ? hover : pinned;
   const near = focus >= 0 ? graph.adj[focus] : null;
+  const deadSet = new Set((f && f.telemetry && f.telemetry.ablated) || []);
   graph.nodes.forEach((n,i) => {
     const p = P[i];
     const related = focus < 0 || i === focus || (near && near.has(i));
@@ -566,12 +579,22 @@ function drawNetwork(f){
     const mag = Math.min(1, Math.abs(d) * (n.kind==='muscle' ? 9 : 4));
     const base = d >= 0 ? [90,209,196] : [226,86,95];
     const k = 0.3 + 0.7*mag;
+    const isDead = deadSet.has(n.n);
     const fade = related ? 1 : 0.18;
     ectx.globalAlpha = fade;
     ectx.fillStyle = `rgb(${Math.round(base[0]*k)},${Math.round(base[1]*k)},${Math.round(base[2]*k)})`;
     let r = (n.kind==='muscle' ? 2.4 + 1.6*mag : 2.6 + 2.4*mag)*dpr;
     if (i === focus) r *= 2.0;
-    ectx.beginPath(); ectx.arc(p[0],p[1],r,0,7); ectx.fill();
+    if (isDead) {
+      ectx.strokeStyle = 'rgba(226,86,95,.95)'; ectx.lineWidth = 1.6*dpr;
+      const q = 3.2*dpr;
+      ectx.beginPath();
+      ectx.moveTo(p[0]-q,p[1]-q); ectx.lineTo(p[0]+q,p[1]+q);
+      ectx.moveTo(p[0]+q,p[1]-q); ectx.lineTo(p[0]-q,p[1]+q);
+      ectx.stroke();
+    } else {
+      ectx.beginPath(); ectx.arc(p[0],p[1],r,0,7); ectx.fill();
+    }
     if (focus >= 0 && related) {
       ectx.globalAlpha = 1;
       ectx.strokeStyle = i === focus ? '#ffd479' : 'rgba(255,212,121,.55)';
@@ -633,6 +656,7 @@ function netHitTest(ev){
 
 function describeNode(li){
   const n = graph.nodes[li];
+  const dead = ((frame && frame.telemetry.ablated) || []).includes(n.n);
   const a = (frame && frame.activity && n.ci !== undefined) ? frame.activity[n.ci] : 0.5;
   const dev = a - 0.5;
   const sign = dev >= 0 ? '+' : '';
@@ -645,15 +669,15 @@ function describeNode(li){
     return `<div class="kv"><span>${arrow} ${l.to.n}</span><span>${l.w} ${kind}</span></div>`;
   }).join('');
   const deg = (graph.links[li] || []).length;
-  return `<div style="font-size:13px;font-weight:600">${n.n}</div>`
+  return `<div style="font-size:13px;font-weight:600;color:${dead?'var(--bad)':'inherit'}">${n.n}</div>`
     + `<div style="color:var(--dim)">${graph.layers[n.layer]}`
     + (n.nt ? ` &middot; ${n.nt}` : '') + `</div>`
     + `<div style="margin:5px 0"><span style="color:${col}">drive ${a.toFixed(2)} `
     + `(${sign}${dev.toFixed(2)})</span></div>`
     + `<div style="color:var(--dim);margin-bottom:3px">${deg} strong connections</div>`
     + rows
-    + (pinned === li ? '<div style="color:var(--warn);margin-top:5px">pinned - click again to release</div>'
-                     : '<div style="color:var(--dim);margin-top:5px">click to pin</div>');
+    + (dead ? '<div style="color:var(--bad);margin-top:5px">ABLATED - alt-click to restore</div>'
+            : '<div style="color:var(--dim);margin-top:5px">click to pin, alt-click to ablate</div>');
 }
 
 function netDefaultInfo(){
@@ -676,6 +700,14 @@ net.addEventListener('mousemove', ev => {
 net.addEventListener('click', ev => {
   const hit = netHitTest(ev);
   if(hit < 0){ pinned = -1; netDefaultInfo(); return; }
+  const name = graph.nodes[hit].n;
+  if(ev.altKey || ev.metaKey){
+    // Alt-click is the laser: kill the cell, or revive it if already dead.
+    const dead = (frame && frame.telemetry.ablated || []).includes(name);
+    cmd({cmd: dead ? 'restore_cell' : 'ablate', cell: name})
+      .then(() => { $('netinfo').innerHTML = describeNode(hit); });
+    return;
+  }
   pinned = (pinned === hit) ? -1 : hit;
   $('netinfo').innerHTML = pinned >= 0 ? describeNode(pinned) : describeNode(hit);
 });
@@ -685,6 +717,64 @@ net.addEventListener('mouseleave', () => {
   if(pinned >= 0) $('netinfo').innerHTML = describeNode(pinned);
   else netDefaultInfo();
 });
+
+// --- neuron activity traces -------------------------------------------
+// The stream already carries every cell's activation each frame, so history
+// is kept client-side. 30 s at 30 fps is 900 samples per trace.
+const TRACE_LEN = 900;
+const TRACE_COLS = ['#5ad1c4','#c77dff','#e8a33d','#e2565f','#8fd14f','#7aa2f7'];
+let watch = ['AVAL','AVBL'];
+const history = new Map();
+
+function pushHistory(f){
+  if(!f || !f.activity || !graph) return;
+  for(const name of watch){
+    const node = graph.nodes.find(n => n.n === name);
+    if(!node || node.ci === undefined) continue;
+    let buf = history.get(name);
+    if(!buf){ buf = []; history.set(name, buf); }
+    buf.push(f.activity[node.ci]);
+    if(buf.length > TRACE_LEN) buf.shift();
+  }
+  for(const k of [...history.keys()]) if(!watch.includes(k)) history.delete(k);
+}
+
+function watchPinned(){
+  if(pinned < 0 || !graph){ $('msg').textContent='pin a cell in the network view first'; return; }
+  const name = graph.nodes[pinned].n;
+  if(!watch.includes(name)) watch.push(name);
+  if(watch.length > 6) watch.shift();
+  drawTraces();
+}
+
+function drawTraces(){
+  const c = $('traces'), x = c.getContext('2d');
+  const W = c.width, H = c.height;
+  x.clearRect(0,0,W,H); x.fillStyle='#0e1320'; x.fillRect(0,0,W,H);
+  // Resting drive is 0.5; mark it so deflections read as up or down.
+  x.strokeStyle='rgba(139,152,173,.35)'; x.setLineDash([3,3]);
+  x.beginPath(); x.moveTo(0,H/2); x.lineTo(W,H/2); x.stroke(); x.setLineDash([]);
+  watch.forEach((name,k) => {
+    const buf = history.get(name);
+    if(!buf || buf.length < 2) return;
+    x.strokeStyle = TRACE_COLS[k % TRACE_COLS.length];
+    x.lineWidth = 1.3; x.beginPath();
+    // Fixed 0..1 scale: these are activations, not arbitrary units.
+    buf.forEach((v,i) => {
+      const px = W * (i/(TRACE_LEN-1));
+      const py = H - v*H;
+      i ? x.lineTo(px,py) : x.moveTo(px,py);
+    });
+    x.stroke();
+  });
+  x.fillStyle='rgba(139,152,173,.8)'; x.font='9px ui-monospace,monospace';
+  x.fillText('1.0', 3, 10); x.fillText('rest', 3, H/2-2); x.fillText('0', 3, H-3);
+  x.textAlign='right'; x.fillText('now', W-4, H-3); x.textAlign='left';
+  $('tracelist').innerHTML = watch.length
+    ? watch.map((n,k)=>`<span class="ko" style="background:#141b28;border-color:${TRACE_COLS[k%TRACE_COLS.length]};color:${TRACE_COLS[k%TRACE_COLS.length]}" onclick="watch=watch.filter(w=>w!=='${n}');drawTraces()">${n} &times;</span>`).join('')
+    : '<span style="color:#8b98ad;font-size:11px">nothing watched</span>';
+  $('tagTrace').textContent = watch.length ? `${watch.length}` : '';
+}
 
 const BCOL = {forward:'#5ad1c4',reversal:'#e2565f',omega:'#e8a33d',refractory:'#8b98ad'};
 function updatePanel(f){
@@ -741,9 +831,12 @@ function updatePanel(f){
 }
 
 const es=new EventSource('/stream');
-es.onmessage = ev => { frame=JSON.parse(ev.data); updatePanel(frame); };
+es.onmessage = ev => { frame=JSON.parse(ev.data); updatePanel(frame);
+  pushHistory(frame); drawTraces(); };
 es.onerror = () => { $('msg').textContent='stream disconnected. Is the server running?'; };
 setTool('poke');
+loadGraph();
+drawTraces();
 requestAnimationFrame(render);
 </script>
 </body>
