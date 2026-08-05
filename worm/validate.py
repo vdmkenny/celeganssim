@@ -330,15 +330,42 @@ def _egl30():
 @check("goa-1 loss of function is loopy and hyperactive",
        "Go loss deepens bends and raises speed - opposite sign to egl-30(lf)",
        "Segalat et al. 1995; Cronin et al. 2005: 0.29 vs 0.20 mm/s, flex 1.3 vs 1.0",
-       xfail="amplitude is right (deeper bends) but speed does not follow: "
-             "the scripted oscillator saturates its drive term, so deeper, "
-             "faster bending does not translate into net speed. Fix belongs "
-             "to the proprioceptive CPG (issue #10)")
+       xfail="deeper bends and a faster rhythm are both right (0.71 Hz "
+             "against 0.47 Hz wild type), but NET SPEED is low because the "
+             "animal reverses and turns constantly: goa-1 does ~11 reversals "
+             "and ~7 omega turns in a 45 s run against wild type's zero, and "
+             "reversals subtract displacement. The undulation is hyperactive; "
+             "the trajectory is not. Closing this needs the spontaneous "
+             "reversal rate to be right (issue #6), not the CPG (issue #10)")
 def _goa1():
     wt, ko = gait(), gait(knockouts=["goa-1"])
     return ko["amplitude"] > wt["amplitude"] and ko["speed"] > wt["speed"] * 0.95, \
         f"speed {ko['speed']:.3f} vs {wt['speed']:.3f}, " \
-        f"amplitude {ko['amplitude']*100:.1f}% vs {wt['amplitude']*100:.1f}%"
+        f"amplitude {ko['amplitude']*100:.1f}% vs {wt['amplitude']*100:.1f}%; " \
+        f"reversals {ko['reversals']} vs {wt['reversals']}, " \
+        f"omegas {ko['omegas']} vs {wt['omegas']}"
+
+
+@check("the kinematics harness recovers a known gait",
+       "measuring the scripted oscillator must return the frequency, "
+       "wavelength, direction and bend amplitude it was given; a harness that "
+       "cannot recover hard-coded inputs makes every gait result "
+       "uninterpretable",
+       "self-consistency against body.BodyParams",
+       section="consistency")
+def _kinematics():
+    from .body import BodyParams
+    from .kinematics import analyse, record
+    p = BodyParams()
+    got = analyse(record(_sim(), seconds=60.0, settle=10.0))
+    ok = (abs(got["undulation_hz"] - p.freq_hz) < 0.03
+          and abs(got["wavelength_bl"] - p.wavelength_bl) < 0.05
+          and got["wave_direction"] == "forward"
+          and 0.12 <= got["bend_amplitude_bl"] <= 0.30)
+    return ok, (f"{got['undulation_hz']:.3f} Hz (want {p.freq_hz}), "
+                f"{got['wavelength_bl']:.3f} BL (want {p.wavelength_bl}), "
+                f"{got['wave_direction']}, "
+                f"amplitude {got['bend_amplitude_bl']*100:.1f}% BL")
 
 
 @check("che-1 removes salt sensing but leaves odour intact",
