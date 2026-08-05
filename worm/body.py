@@ -22,7 +22,18 @@ from __future__ import annotations
 
 import numpy as np
 
-N_SEG = 24          # body segments == body-wall muscle rows
+# Segments the body is discretised into. This is a COARSE-GRAINING, not
+# anatomy. The animal has 95 body-wall muscles in four longitudinal quadrants
+# of 24/24/24/23 (the ventral-left quadrant is one short, a real and invariant
+# asymmetry), and within each quadrant the rhomboid cells sit in TWO staggered
+# rows, giving eight longitudinal rows in total -- nearly paired anteriorly,
+# alternating posteriorly. Hall notes the double rows effectively create about
+# twelve segments along the body, so 24 uniform rings of four is a modelling
+# convention. The 96-muscle 4x24 grid used by some simulators is an
+# idealisation with no anatomical basis.
+# Refs: Sulston & Horvitz 1977 Dev Biol 56:110; White et al. 1986 Fig 10;
+# WormAtlas Muscle System (Altun & Hall).
+N_SEG = 24
 N_NODE = N_SEG + 1
 BODY_LENGTH_MM = 1.0
 

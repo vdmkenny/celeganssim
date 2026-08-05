@@ -38,6 +38,22 @@ NT_POLARITY: dict[str, float] = {
 }
 DEFAULT_POLARITY = +0.5  # unknown transmitter: weak excitation
 
+# Data caveat on neuromuscular input. Roughly 29% of all chemical input onto
+# body-wall muscle in this edgelist comes from the sublateral motor neurons
+# (SMB, SMD, SIA, SIB), and those junctions were NOT reconstructed: Cook et al.
+# note they were first seen by immunofluorescence and then confirmed by
+# sampling several animals. White et al. 1986 said of the same processes that
+# "apart from a single NMJ, no synapses have been seen". Treat sublateral
+# muscle drive as low-confidence relative to the ventral cord (35%) and nerve
+# ring (33%) contributions, which are EM-reconstructed.
+#
+# Muscle-muscle gap junctions are also incomplete here: the edgelist carries a
+# nearest-neighbour chain within each quadrant and only one cross-quadrant
+# pair, whereas White describes left/right coupling through the muscle arms at
+# the cord. Arms were only fully traced for head muscles, so the absence is a
+# reconstruction limit, not biology. Measured coupling is 350 pS or less
+# (Liu et al. 2006 J Biol Chem 281:7881).
+
 E_EXC = 0.0     # excitatory synaptic reversal potential, mV
 E_INH = -48.0   # inhibitory synaptic reversal potential, mV
 

@@ -270,6 +270,24 @@ potentials, developmental timings, body sizes, brood size, lifespan.
   content. Mapping a gene to what its loss *does* is a curated table.
 - **Escape is a state machine.** Reversal and omega turn have separable motor
   pathways; the network decides when each fires.
+- **The 24-segment body is a coarse-graining.** The animal has 95 body-wall
+  muscles in quadrants of 24/24/24/23, staggered into eight longitudinal rows
+  rather than transverse rings, which Hall notes amounts to roughly twelve
+  segments. Muscle index is mapped proportionally onto segments, preserving
+  anterior-posterior order without claiming a ring. The 4x24 grid some
+  simulators use is an idealisation, not anatomy.
+- **Innervation is treated as uniform along the body, and is not.** The
+  anterior 16 muscles receive nerve-ring input only, the next 16 receive both
+  ring and cord, and only the posterior 63 are on the cord alone (White et al.
+  1986). The head is a separate oscillator in the animal, and muscle arms reach
+  only the nearest cord, which is the structural reason the body is restricted
+  to dorsoventral waves.
+- **About 29% of neuromuscular input in the dataset was never
+  EM-reconstructed.** The sublateral motor neurons (SMB, SMD, SIA, SIB) were
+  recorded by immunofluorescence and sampling rather than serial section, and
+  White et al. reported almost no synapses on those processes. Muscle-muscle
+  gap junctions are similarly incomplete, carrying almost no left-right
+  coupling where White describes it through the muscle arms.
 - **Not modelled:** pharynx, gonad, intestine, embryonic lineage, hydrodynamics
   beyond RFT. One animal, so crowding is a scalar.
 
@@ -308,6 +326,14 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 - [Deng et al. (2021), eNeuro 8:ENEURO.0241-20.2020](https://doi.org/10.1523/ENEURO.0241-20.2020)
 - [Cronin et al. (2005), BMC Genet. 6:5](https://doi.org/10.1186/1471-2156-6-5) (gait metrics)
 - [Fang-Yen et al. (2010), PNAS 107:20323](https://doi.org/10.1073/pnas.1003016107)
+
+**Musculature and the neuromuscular junction**
+- Sulston & Horvitz (1977), Dev. Biol. 56:110 (post-embryonic lineage; 95 muscles, 24/24/24/23 quadrants)
+- White, Southgate, Thomson & Brenner (1986), Phil. Trans. R. Soc. B 314:1, Fig. 10 (eight staggered rows; head/neck/body innervation)
+- [WormAtlas Muscle System (Altun & Hall)](https://www.wormatlas.org/hermaphrodite/musclesomatic/mainframe.htm) · [WormBook: body wall muscle](https://www.ncbi.nlm.nih.gov/books/NBK426064/)
+- [Dixon & Roy (2005), Development 132:3079](https://doi.org/10.1242/dev.01883) (muscle arms; ~4 per cell in the adult, one cord only)
+- Liu, Chen, Gaier, Joshi & Wang (2006), J. Biol. Chem. 281:7881 (muscle-muscle gap junctions, 350 pS or less)
+- [Liu et al. (2013), PLoS ONE 8:e76877](https://doi.org/10.1371/journal.pone.0076877) (six innexins couple body-wall muscle)
 
 **Mechanosensation and escape**
 - Chalfie & Sulston (1981), Dev. Biol. 82:358 · Chalfie et al. (1985), J. Neurosci. 5:956

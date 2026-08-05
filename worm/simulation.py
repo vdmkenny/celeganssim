@@ -141,7 +141,20 @@ class WormSimulation:
         self.reset()
 
     def _muscle_rows(self) -> None:
-        """Group the 95 body-wall muscles into dorsal/ventral rows."""
+        """Group the 95 body-wall muscles into dorsal/ventral body segments.
+
+        Approximate by construction. Muscle cells are staggered within each
+        quadrant rather than forming transverse rings, and the ventral-left
+        quadrant has 23 cells against 24 elsewhere, so no one-to-one alignment
+        across quadrants exists. Cell index is mapped proportionally onto
+        segments, which preserves anterior-posterior order (verified monotonic
+        for every motor class) without claiming a ring.
+
+        Also uniform where the animal is not: the anterior 16 muscles are
+        driven by nerve-ring motor neurons only and the next 16 by both the
+        ring and the cord, with just the posterior 63 on the cord alone
+        (White et al. 1986). The head is a separate oscillator in the animal.
+        """
         self.row_d: list[list[int]] = [[] for _ in range(N_SEG)]
         self.row_v: list[list[int]] = [[] for _ in range(N_SEG)]
         rows = [self.conn.cell_info[n].get("row", 1)
