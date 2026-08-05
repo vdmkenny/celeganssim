@@ -81,8 +81,15 @@ class WormSimulation:
         from .lifecycle import Lifecycle
         self.life = Lifecycle()
         if self.cfg.start_adult:
+            # Skip development, but still run what the L4/adult moult does:
+            # spermatogenesis happens once, there, and nothing else makes
+            # sperm afterwards.
+            from .lifecycle import SELF_SPERM
             self.life.stage = "adult"
             self.life.reserves = 0.7
+            self.life.self_sperm = SELF_SPERM
+            self.life.lifespan_d = (
+                self.life.lifespan_d * self.genome.longevity_scale())
         self.body.set_length(self.life.body_length_mm)
         self.events: list[tuple[float, str]] = []
 

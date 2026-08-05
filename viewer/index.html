@@ -147,7 +147,7 @@ body.network #hud{display:none}
            oninput="setSpeed(this.value)">
 
     </div></details>
-    <details open><summary>Life cycle &amp; feeding<span class="tag" id="tagLife">adult</span></summary><div class="body">
+    <details><summary>Life cycle &amp; feeding<span class="tag" id="tagLife">adult</span></summary><div class="body">
     <div class="kv"><span>stage</span><span id="lifestage">adult</span></div>
     <div class="kv"><span>age</span><span id="age">0 h</span></div>
     <div class="kv"><span>body length</span><span id="blen">1.11 mm</span></div>
@@ -217,6 +217,15 @@ body.network #hud{display:none}
 
 <script>
 const $ = id => document.getElementById(id);
+const _lastHTML = new Map(), _lastText = new Map();
+function setHTML(id, html){
+  if (_lastHTML.get(id) === html) return;
+  _lastHTML.set(id, html); $(id).innerHTML = html;
+}
+function setText(id, txt){
+  if (_lastText.get(id) === txt) return;
+  _lastText.set(id, txt); $(id).textContent = txt;
+}
 const main = $('main'), mctx = main.getContext('2d');
 const mini = $('mini'), nctx = mini.getContext('2d');
 const musc = $('musc'), sctx = musc.getContext('2d');
@@ -227,7 +236,8 @@ function fit(){
   const r = $('stage').getBoundingClientRect();
   for (const c of [main, net]) { c.width = r.width*dpr; c.height = r.height*dpr; }
 }
-window.addEventListener('resize', fit); fit();
+window.addEventListener('resize', () => { baseLayer=null; lastDrawKey=''; fit(); });
+fit();
 
 // ---- controls -------------------------------------------------------
 async function cmd(body){
@@ -531,94 +541,152 @@ function netLayout(w, h){
                               padY + n.y*(h - padY - 20*dpr)]);
 }
 
+// The static edge layer is baked once into an offscreen canvas. Its geometry
+// never changes, only brightness does, and stroking 3257 beziers individually
+// every frame is what made this slow. Per frame we now redraw only the edges
+// actually carrying signal, batched into a handful of paths.
+let baseLayer = null, baseKey = '';
+let lastDrawKey = '';
+
+function buildBaseLayer(w, h, P, deadEdge){
+  const key = `${w}x${h}:${[...deadEdge].sort().join(',')}`;
+  if (baseLayer && baseKey === key) return;
+  baseKey = key;
+  baseLayer = document.createElement('canvas');
+  baseLayer.width = w; baseLayer.height = h;
+  const b = baseLayer.getContext('2d');
+  // Two batched paths: one for chemical synapses, one for gap junctions.
+  for (const gapPass of [0, 1]) {
+    b.beginPath();
+    for (const [i, j, wt, gap] of graph.edges) {
+      if (gap !== gapPass) continue;
+      const a = graph.byIndex[i], c = graph.byIndex[j];
+      if (!a || !c) continue;
+      if (deadEdge.has(a.n) || deadEdge.has(c.n)) continue;
+      const pa = P[a.li], pc = P[c.li];
+      const mx = (pa[0] + pc[0]) / 2;
+      b.moveTo(pa[0], pa[1]);
+      b.bezierCurveTo(mx, pa[1], mx, pc[1], pc[0], pc[1]);
+    }
+    b.strokeStyle = gapPass ? 'rgba(107,122,146,.055)' : 'rgba(90,209,196,.05)';
+    b.lineWidth = 0.5 * dpr;
+    b.stroke();
+  }
+}
+
 function drawNetwork(f){
   const w = net.width, h = net.height;
-  ectx.clearRect(0,0,w,h);
-  ectx.fillStyle = '#0b0e14'; ectx.fillRect(0,0,w,h);
-  if(!graph){ return; }
-  const P = netLayout(w,h);
-  netPts = P;
+  if(!graph){ ectx.fillStyle='#0b0e14'; ectx.fillRect(0,0,w,h); return; }
   const act = (f && f.activity) || null;
   const deadEdge = new Set((f && f.telemetry && f.telemetry.ablated) || []);
-
-  // Edges first, faint, so the nodes read on top.
-  for(const [i,j,wt,gap] of graph.edges){
-    const a = graph.byIndex[i], b = graph.byIndex[j];
-    if(!a || !b) continue;
-    if(deadEdge.has(a.n) || deadEdge.has(b.n)) continue;
-    const ai = a.li, bi = b.li;
-    const pa = P[ai], pb = P[bi];
-    // Presynaptic drive modulates edge brightness, so you can watch signal move.
-    let s = act ? Math.max(0, (act[i]-0.5)*2) : 0;
-    const foc = (hover >= 0) ? hover : pinned;
-    const lit = foc>=0 && (ai===foc || bi===foc);
-    if (foc>=0 && !lit) { ectx.globalAlpha = 0.12; } else { ectx.globalAlpha = 1; }
-    ectx.strokeStyle = gap
-      ? `rgba(107,122,146,${lit?0.85:0.05+0.25*s})`
-      : `rgba(90,209,196,${lit?0.9:0.035+0.4*s})`;
-    ectx.lineWidth = (lit?1.6:0.5)*dpr;
-    ectx.beginPath();
-    ectx.moveTo(pa[0],pa[1]);
-    const mx=(pa[0]+pb[0])/2;
-    ectx.bezierCurveTo(mx,pa[1],mx,pb[1],pb[0],pb[1]);
-    ectx.stroke();
-  }
-  ectx.globalAlpha = 1;
-
-  // Nodes.
   const focus = (hover >= 0) ? hover : pinned;
-  const near = focus >= 0 ? graph.adj[focus] : null;
-  const deadSet = new Set((f && f.telemetry && f.telemetry.ablated) || []);
-  graph.nodes.forEach((n,i) => {
-    const p = P[i];
-    const related = focus < 0 || i === focus || (near && near.has(i));
-    const a = (act && n.ci !== undefined) ? act[n.ci] : 0.5;
-    const d = a - 0.5;                       // deviation from resting drive
-    // Muscle potentials swing far less than neuron drive, so they need their
-    // own gain or the whole output column reads as dead.
-    const mag = Math.min(1, Math.abs(d) * (n.kind==='muscle' ? 9 : 4));
-    const base = d >= 0 ? [90,209,196] : [226,86,95];
-    const k = 0.3 + 0.7*mag;
-    const isDead = deadSet.has(n.n);
-    const fade = related ? 1 : 0.18;
-    ectx.globalAlpha = fade;
-    ectx.fillStyle = `rgb(${Math.round(base[0]*k)},${Math.round(base[1]*k)},${Math.round(base[2]*k)})`;
-    let r = (n.kind==='muscle' ? 2.4 + 1.6*mag : 2.6 + 2.4*mag)*dpr;
-    if (i === focus) r *= 2.0;
-    if (isDead) {
-      ectx.strokeStyle = 'rgba(226,86,95,.95)'; ectx.lineWidth = 1.6*dpr;
-      const q = 3.2*dpr;
-      ectx.beginPath();
-      ectx.moveTo(p[0]-q,p[1]-q); ectx.lineTo(p[0]+q,p[1]+q);
-      ectx.moveTo(p[0]+q,p[1]-q); ectx.lineTo(p[0]-q,p[1]+q);
-      ectx.stroke();
-    } else {
-      ectx.beginPath(); ectx.arc(p[0],p[1],r,0,7); ectx.fill();
+
+  // Only repaint when something actually changed.
+  const key = `${w}x${h}|${focus}|${f&&f.telemetry?f.telemetry.t:0}|${baseKey}`;
+  if (key === lastDrawKey) return;
+  lastDrawKey = key;
+
+  const P = netLayout(w, h);
+  netPts = P;
+  buildBaseLayer(w, h, P, deadEdge);
+
+  ectx.fillStyle = '#0b0e14'; ectx.fillRect(0,0,w,h);
+  ectx.drawImage(baseLayer, 0, 0);
+
+  // Active edges only, bucketed by brightness so each bucket is one stroke.
+  const BUCKETS = 5;
+  const buckets = Array.from({length: BUCKETS*2}, () => []);
+  for (const [i, j, wt, gap] of graph.edges) {
+    const a = graph.byIndex[i], c = graph.byIndex[j];
+    if (!a || !c) continue;
+    if (deadEdge.has(a.n) || deadEdge.has(c.n)) continue;
+    if (focus >= 0) { if (a.li !== focus && c.li !== focus) continue; }
+    else {
+      const s = act ? (act[i] - 0.5) * 2 : 0;
+      if (s < 0.12) continue;                 // resting edges are in the base
+      const b = Math.min(BUCKETS-1, Math.floor(s * BUCKETS));
+      buckets[gap*BUCKETS + b].push([P[a.li], P[c.li]]);
+      continue;
     }
-    if (focus >= 0 && related) {
-      ectx.globalAlpha = 1;
-      ectx.strokeStyle = i === focus ? '#ffd479' : 'rgba(255,212,121,.55)';
-      ectx.lineWidth = (i === focus ? 2 : 1)*dpr;
-      ectx.beginPath(); ectx.arc(p[0],p[1], r + 3*dpr, 0, 7); ectx.stroke();
+    buckets[gap*BUCKETS + BUCKETS-1].push([P[a.li], P[c.li]]);
+  }
+  buckets.forEach((segs, k) => {
+    if (!segs.length) return;
+    const gap = k >= BUCKETS, b = k % BUCKETS;
+    const alpha = focus >= 0 ? 0.85 : (0.10 + 0.6 * (b+1)/BUCKETS);
+    ectx.beginPath();
+    for (const [pa, pc] of segs) {
+      const mx = (pa[0] + pc[0]) / 2;
+      ectx.moveTo(pa[0], pa[1]);
+      ectx.bezierCurveTo(mx, pa[1], mx, pc[1], pc[0], pc[1]);
     }
-    ectx.globalAlpha = 1;
+    ectx.strokeStyle = gap ? `rgba(107,122,146,${alpha})` : `rgba(90,209,196,${alpha})`;
+    ectx.lineWidth = (focus >= 0 ? 1.5 : 0.6) * dpr;
+    ectx.stroke();
   });
 
-  // Name the focused cell right on the canvas.
-  if (focus >= 0) {
-    const n = graph.nodes[focus], p = P[focus];
-    ectx.font = `600 ${12*dpr}px ui-monospace,monospace`;
-    const label = n.n;
-    const tw = ectx.measureText(label).width;
-    let lx = p[0] + 12*dpr, ly = p[1] - 10*dpr;
-    if (lx + tw > w - 8*dpr) lx = p[0] - tw - 12*dpr;
-    ectx.fillStyle = 'rgba(8,11,17,.9)';
-    ectx.fillRect(lx - 4*dpr, ly - 12*dpr, tw + 8*dpr, 17*dpr);
-    ectx.fillStyle = '#ffd479';
-    ectx.fillText(label, lx, ly);
+  // Nodes, bucketed by drive so fills batch too.
+  const near = focus >= 0 ? graph.adj[focus] : null;
+  const NB = 8;
+  const nodeBuckets = Array.from({length: NB*2}, () => []);
+  const dead = [];
+  graph.nodes.forEach((n,i) => {
+    const p = P[i];
+    if (deadEdge.has(n.n)) { dead.push(p); return; }
+    const related = focus < 0 || i === focus || (near && near.has(i));
+    const a = (act && n.ci !== undefined) ? act[n.ci] : 0.5;
+    const d = a - 0.5;
+    const mag = Math.min(1, Math.abs(d) * (n.kind==='muscle' ? 9 : 4));
+    const b = Math.min(NB-1, Math.floor(mag * NB));
+    nodeBuckets[(d >= 0 ? 0 : NB) + b].push([p, n.kind==='muscle', related, i===focus]);
+  });
+  nodeBuckets.forEach((items, k) => {
+    if (!items.length) return;
+    const neg = k >= NB, b = k % NB;
+    const mag = (b + 0.5) / NB;
+    const base = neg ? [226,86,95] : [90,209,196];
+    const kk = 0.3 + 0.7*mag;
+    ectx.fillStyle = `rgb(${Math.round(base[0]*kk)},${Math.round(base[1]*kk)},${Math.round(base[2]*kk)})`;
+    for (const [p, isMuscle, related, isFocus] of items) {
+      ectx.globalAlpha = related ? 1 : 0.18;
+      let r = (isMuscle ? 2.4 + 1.6*mag : 2.6 + 2.4*mag) * dpr;
+      if (isFocus) r *= 2.0;
+      ectx.beginPath(); ectx.arc(p[0],p[1],r,0,7); ectx.fill();
+    }
+  });
+  ectx.globalAlpha = 1;
+
+  // Ablated cells as red crosses.
+  if (dead.length) {
+    ectx.strokeStyle='rgba(226,86,95,.95)'; ectx.lineWidth=1.6*dpr;
+    ectx.beginPath();
+    const q = 3.2*dpr;
+    for (const p of dead) {
+      ectx.moveTo(p[0]-q,p[1]-q); ectx.lineTo(p[0]+q,p[1]+q);
+      ectx.moveTo(p[0]+q,p[1]-q); ectx.lineTo(p[0]-q,p[1]+q);
+    }
+    ectx.stroke();
   }
 
-  // Column headings on a band, so they stay readable over the edge tangle.
+  // Ring the focus and its partners.
+  if (focus >= 0) {
+    ectx.strokeStyle='rgba(255,212,121,.55)'; ectx.lineWidth=1*dpr;
+    ectx.beginPath();
+    if (near) for (const i of near) { const p=P[i]; ectx.moveTo(p[0]+7*dpr,p[1]); ectx.arc(p[0],p[1],7*dpr,0,7); }
+    ectx.stroke();
+    const p = P[focus], n = graph.nodes[focus];
+    ectx.strokeStyle='#ffd479'; ectx.lineWidth=2*dpr;
+    ectx.beginPath(); ectx.arc(p[0],p[1],10*dpr,0,7); ectx.stroke();
+    ectx.font = `600 ${12*dpr}px ui-monospace,monospace`;
+    const tw = ectx.measureText(n.n).width;
+    let lx = p[0] + 14*dpr, ly = p[1] - 10*dpr;
+    if (lx + tw > w - 8*dpr) lx = p[0] - tw - 14*dpr;
+    ectx.fillStyle = 'rgba(8,11,17,.9)';
+    ectx.fillRect(lx - 4*dpr, ly - 12*dpr, tw + 8*dpr, 17*dpr);
+    ectx.fillStyle = '#ffd479'; ectx.fillText(n.n, lx, ly);
+  }
+
+  // Column headings.
   ectx.fillStyle='rgba(11,14,20,.95)';
   ectx.fillRect(0,0,w,38*dpr);
   ectx.strokeStyle='rgba(30,38,53,1)'; ectx.lineWidth=1*dpr;
@@ -635,9 +703,6 @@ function drawNetwork(f){
     ectx.fillStyle='rgba(139,152,173,.85)';
     ectx.font=`${11*dpr}px ui-monospace,monospace`;
     ectx.fillText(`${counts[i]||0} cells`, cx2, 31*dpr);
-    // Tick marking the column axis.
-    ectx.strokeStyle='rgba(90,209,196,.25)';
-    ectx.beginPath(); ectx.moveTo(cx2,40*dpr); ectx.lineTo(cx2,h); ectx.stroke();
   });
   ectx.textAlign='left';
 }
@@ -661,12 +726,10 @@ function describeNode(li){
   const dev = a - 0.5;
   const sign = dev >= 0 ? '+' : '';
   const col = dev >= 0 ? 'var(--accent)' : 'var(--bad)';
-  // Strongest partners, chemical and electrical, as the connectome has them.
   const links = (graph.links[li] || []).slice().sort((p,q) => q.w - p.w).slice(0, 6);
   const rows = links.map(l => {
     const arrow = l.gap ? '&harr;' : (l.out ? '&rarr;' : '&larr;');
-    const kind = l.gap ? 'gap' : 'chem';
-    return `<div class="kv"><span>${arrow} ${l.to.n}</span><span>${l.w} ${kind}</span></div>`;
+    return `<div class="kv"><span>${arrow} ${l.to.n}</span><span>${l.w} ${l.gap?'gap':'chem'}</span></div>`;
   }).join('');
   const deg = (graph.links[li] || []).length;
   return `<div style="font-size:13px;font-weight:600;color:${dead?'var(--bad)':'inherit'}">${n.n}</div>`
@@ -682,9 +745,9 @@ function describeNode(li){
 
 function netDefaultInfo(){
   if(!graph) return;
-  $('netinfo').innerHTML =
+  setHTML('netinfo',
     `<b>${graph.nodes.length}</b> cells<br><b>${graph.edges.length}</b> strongest links`
-    + `<br><span style="color:var(--dim)">hover a node to inspect</span>`;
+    + `<br><span style="color:var(--dim)">hover a node to inspect</span>`);
 }
 
 net.addEventListener('mousemove', ev => {
@@ -728,8 +791,9 @@ const history = new Map();
 
 function pushHistory(f){
   if(!f || !f.activity || !graph) return;
+  if(!graph._byName){ graph._byName = new Map(graph.nodes.map(n => [n.n, n])); }
   for(const name of watch){
-    const node = graph.nodes.find(n => n.n === name);
+    const node = graph._byName.get(name);
     if(!node || node.ci === undefined) continue;
     let buf = history.get(name);
     if(!buf){ buf = []; history.set(name, buf); }
@@ -770,64 +834,64 @@ function drawTraces(){
   x.fillStyle='rgba(139,152,173,.8)'; x.font='9px ui-monospace,monospace';
   x.fillText('1.0', 3, 10); x.fillText('rest', 3, H/2-2); x.fillText('0', 3, H-3);
   x.textAlign='right'; x.fillText('now', W-4, H-3); x.textAlign='left';
-  $('tracelist').innerHTML = watch.length
+  setHTML('tracelist', watch.length
     ? watch.map((n,k)=>`<span class="ko" style="background:#141b28;border-color:${TRACE_COLS[k%TRACE_COLS.length]};color:${TRACE_COLS[k%TRACE_COLS.length]}" onclick="watch=watch.filter(w=>w!=='${n}');drawTraces()">${n} &times;</span>`).join('')
-    : '<span style="color:#8b98ad;font-size:11px">nothing watched</span>';
-  $('tagTrace').textContent = watch.length ? `${watch.length}` : '';
+    : '<span style="color:#8b98ad;font-size:11px">nothing watched</span>');
+  setText('tagTrace', watch.length ? `${watch.length}` : '');
 }
 
 const BCOL = {forward:'#5ad1c4',reversal:'#e2565f',omega:'#e8a33d',refractory:'#8b98ad'};
 function updatePanel(f){
   const t=f.telemetry, a=f.neuron_activity;
-  $('behavior').textContent=t.behavior;
+  setText('behavior', t.behavior);
   $('behavior').style.color=BCOL[t.behavior]||'#e6edf7';
-  $('speed').textContent=t.speed_mm_s.toFixed(3)+' mm/s';
-  $('time').textContent=t.t.toFixed(1)+' s';
-  $('rev').textContent=t.reversals; $('omg').textContent=t.omegas;
-  $('len').textContent=Math.round(t.length_scale*100)+'%';
-  $('fw').textContent=a.forward_cmd.toFixed(4);
-  $('bw').textContent=a.backward_cmd.toFixed(4);
+  setText('speed', t.speed_mm_s.toFixed(3)+' mm/s');
+  setText('time', t.t.toFixed(1)+' s');
+  setText('rev', t.reversals); setText('omg', t.omegas);
+  setText('len', Math.round(t.length_scale*100)+'%');
+  setText('fw', a.forward_cmd.toFixed(4));
+  setText('bw', a.backward_cmd.toFixed(4));
   $('fwb').style.width=Math.min(100,a.forward_cmd*100)+'%';
   $('bwb').style.width=Math.min(100,a.backward_cmd*100)+'%';
   const s=t.sensory||{};
-  $('sens').innerHTML = Object.keys(s).length
+  setHTML('sens', Object.keys(s).length
     ? Object.entries(s).map(([k,v])=>`<div class="kv"><span>${k}</span><span>${v.toFixed(2)}</span></div>`).join('')
-    : '<span style="color:#8b98ad">no active sensory drive</span>';
+    : '<span style="color:#8b98ad">no active sensory drive</span>');
   const L=t.life;
   if(L){
     const dead = !L.alive;
     const tag = dead ? ('dead ('+L.cause_of_death+')')
               : L.dauer ? 'dauer'
               : L.arrested ? L.stage+' (arrested)' : L.stage;
-    $('lifestage').textContent = tag;
+    setText('lifestage', tag);
     $('lifestage').style.color = dead ? '#e2565f'
       : L.dauer ? '#e8a33d' : (L.arrested ? '#e2565f' : '#e6edf7');
-    $('sperm').textContent = L.stage==='adult'||dead ? L.self_sperm : '-';
-    $('mclass').textContent = dead ? 'dead' : L.movement_class;
+    setText('sperm', L.stage==='adult'||dead ? L.self_sperm : '-');
+    setText('mclass', dead ? 'dead' : L.movement_class);
     $('mclass').style.color = {A:'#5ad1c4',B:'#e8a33d',C:'#e2565f',dead:'#e2565f'}[L.movement_class]||'#e6edf7';
     // During embryogenesis, say what is actually happening in the eggshell.
-    $('milestone').textContent = L.milestone
+    setText('milestone', L.milestone
       ? `${L.milestone} - ${Math.round(L.stage_progress*100)}% to hatching`
-      : (dead ? `lived ${L.adult_day.toFixed(1)} adult days, laid ${L.eggs_laid} eggs` : '');
-    $('age').textContent = L.adult_day > 0
-      ? `adult day ${L.adult_day.toFixed(1)}` : `${L.age_h.toFixed(1)} h`;
-    $('blen').textContent = L.body_length_mm.toFixed(3)+' mm';
-    $('pump').textContent = L.pump_hz.toFixed(1)+' Hz';
-    $('eggs').textContent = L.eggs_laid;
-    $('resv').textContent = (L.reserves*100).toFixed(0)+'%'+(L.starving?' starving':'');
+      : (dead ? `lived ${L.adult_day.toFixed(1)} adult days, laid ${L.eggs_laid} eggs` : ''));
+    setText('age', L.adult_day > 0
+      ? `adult day ${L.adult_day.toFixed(1)}` : `${L.age_h.toFixed(1)} h`);
+    setText('blen', L.body_length_mm.toFixed(3)+' mm');
+    setText('pump', L.pump_hz.toFixed(1)+' Hz');
+    setText('eggs', L.eggs_laid);
+    setText('resv', (L.reserves*100).toFixed(0)+'%'+(L.starving?' starving':''));
     $('resvb').style.width = (L.reserves*100)+'%';
     $('resvb').style.background = L.starving ? '#e2565f' : '#8fd14f';
     // Keep the collapsed-section summaries informative.
-    $('tagLife').textContent = dead ? 'dead' : `${tag} · ${(L.reserves*100).toFixed(0)}%`;
+    setText('tagLife', dead ? 'dead' : `${tag} · ${(L.reserves*100).toFixed(0)}%`);
     $('tagLife').style.color = L.starving ? '#e2565f' : 'var(--accent)';
   }
   const kos = t.knockouts||[];
-  $('tagKO').textContent = kos.length ? kos.join(' ') : 'wild type';
+  setText('tagKO', kos.length ? kos.join(' ') : 'wild type');
   $('tagKO').style.color = kos.length ? '#e2565f' : 'var(--dim)';
   const ko=t.knockouts||[];
-  $('kolist').innerHTML = ko.length
+  setHTML('kolist', ko.length
     ? ko.map(g=>`<span class="ko" title="click to restore" onclick="cmd({cmd:'restore',gene:'${g}'})">${g} ✕</span>`).join('')
-    : '<span style="color:#8b98ad;font-size:11px">wild type</span>';
+    : '<span style="color:#8b98ad;font-size:11px">wild type</span>');
 }
 
 const es=new EventSource('/stream');
