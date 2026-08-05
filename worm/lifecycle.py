@@ -28,6 +28,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+import numpy as np
+
 # Larval stage durations in hours at 20 C (intermolt + molt), and body length
 # in mm at the start of each stage.
 STAGES: dict[str, tuple[float, float]] = {
@@ -69,6 +71,9 @@ SELF_SPERM = 300
 # Mean and spread of adult lifespan in days at 20 C.
 LIFESPAN_MEAN_D = 15.2
 LIFESPAN_SD_D = 3.6
+# Floor for the stochastic lifespan draw: below this is embryonic/larval
+# lethality territory, which this model does not simulate.
+LIFESPAN_MIN_D = 2.0
 
 
 @dataclass
@@ -92,6 +97,21 @@ class LifecycleParams:
     egg_onset_h: float = 9.0
 
 
+# Provenance tags for the parameter registry (worm/parameters.py).
+PROVENANCE = {
+    "q10": "published",                       # standard Q10 approximation
+    "reference_temp": "measured",
+    "starve_threshold": "tuned",
+    "dauer_decision_at": "tuned",             # late L1, Cassada & Russell 1975 timing
+    "dauer_pheromone_threshold": "tuned",
+    "dauer_recovery_food": "tuned",
+    "peak_ovulation_per_h": "measured",       # McCarter et al. 1999
+    "ovulation_decay_d": "measured",          # ~5 d reproductive period
+    "eggs_need_reserves": "tuned",
+    "egg_onset_h": "measured",                # Muschiol et al. 2009
+}
+
+
 @dataclass
 class Lifecycle:
     params: LifecycleParams = field(default_factory=LifecycleParams)
@@ -109,9 +129,30 @@ class Lifecycle:
     total_ingested: float = 0.0
     pump_hz: float = 0.0
     lifespan_d: float = LIFESPAN_MEAN_D
+    seed: int = 0
     _dauer_decided: bool = False
     _egg_timer: float = 0.0
     _noted_exhausted: bool = False
+
+    def __post_init__(self) -> None:
+        # One RNG per animal: its lifespan is drawn once, at the L4/adult
+        # moult, so individuals differ and cohorts have a real distribution.
+        self._rng = np.random.default_rng(self.seed)
+
+    def draw_lifespan(self, longevity_scale: float = 1.0,
+                      temp_c: float = 20.0) -> float:
+        """This animal's own expected adult lifespan, in days.
+
+        Drawn from the measured distribution (Huang, Xiong & Kornfeld 2004:
+        15.2 +/- 3.6 d at 20 C), then scaled by genotype and temperature.
+        Pumping span is the best single predictor of individual lifespan
+        (r = 0.83), so the decline trajectories elsewhere scale against this
+        drawn value rather than a fixed calendar.
+        """
+        drawn = LIFESPAN_MEAN_D + self._rng.normal(0.0, LIFESPAN_SD_D)
+        return max(LIFESPAN_MIN_D,
+                   drawn * longevity_scale
+                   * self.temperature_factor(temp_c) ** -1.0)
 
     # -- derived --------------------------------------------------------
     @property
@@ -281,11 +322,8 @@ class Lifecycle:
                 # Everything the animal will ever self-fertilise comes from
                 # this store.
                 self.self_sperm = SELF_SPERM
-                # Lifespan is set now, scaled by temperature and genotype.
-                self.lifespan_d = max(
-                    2.0,
-                    LIFESPAN_MEAN_D * longevity_scale
-                    * self.temperature_factor(temp_c) ** -1.0)
+                # Lifespan is drawn now, scaled by temperature and genotype.
+                self.lifespan_d = self.draw_lifespan(longevity_scale, temp_c)
                 events["adult"] = {"lifespan_d": round(self.lifespan_d, 1),
                                    "self_sperm": self.self_sperm}
 

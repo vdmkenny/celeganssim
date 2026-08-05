@@ -1,10 +1,20 @@
 """Check the simulator's behaviour against published phenotypes.
 
-Each check states the literature expectation it is testing and the source. This
-is a behavioural sanity suite, not a claim of quantitative fidelity: the
-tolerances are wide because the model is coarse. What it does catch is sign
-errors -- a mutant getting faster when the animal gets slower, touch working
-when it should be abolished, that sort of thing.
+Two kinds of checks live here, reported separately because they are not the
+same claim:
+
+  * "behaviour" checks run the animal and measure something -- these are the
+    validation suite proper.
+  * "consistency" checks pin a model parameter or a data-derived invariant.
+    They catch editing accidents; they do not validate the model against the
+    animal.
+
+A check can be registered as expected-to-fail (xfail) when the gap between
+model and literature is known and tracked. XFAILs are reported, not hidden,
+and a check that starts passing unexpectedly (XPASS) is flagged so the gap
+issue can be closed. Tolerances are wide because the model is coarse: what
+the behavioural checks catch is sign errors -- a mutant getting faster when
+the animal gets slower, touch working when it should be abolished.
 """
 
 from __future__ import annotations
@@ -77,9 +87,17 @@ def touch_response(region: str, knockouts=(), seed=0) -> dict:
 CHECKS = []
 
 
-def check(name, expectation, source):
+def check(name, expectation, source, section="behaviour", xfail=None):
+    """Register a check.
+
+    section: "behaviour" (runs the animal, measures) or "consistency" (pins a
+        parameter or data invariant).
+    xfail: reason string for a check expected to fail -- a known, tracked gap
+        between the model and the literature. XPASS (unexpected pass) is
+        reported so the gap can be closed.
+    """
     def deco(fn):
-        CHECKS.append((name, expectation, source, fn))
+        CHECKS.append((name, expectation, source, section, xfail, fn))
         return fn
     return deco
 
@@ -161,7 +179,8 @@ def _post():
 @check("touch is positional, not bucketed",
        "the ALM and PLM receptive fields cross over near mid-body, so anterior "
        "touch drives the anterior cells and posterior touch the posterior ones",
-       "Chalfie & Sulston 1981; Chalfie et al. 1985; WormAtlas TRNs")
+       "Chalfie & Sulston 1981; Chalfie et al. 1985; WormAtlas TRNs",
+       section="consistency")
 def _fields():
     from .sensory import TOUCH_FIELDS, _field_coverage
     alm = next(f for f in TOUCH_FIELDS if f["cells"][0] == "ALML")
@@ -211,10 +230,12 @@ def _mec4():
        "a true mec-10 deletion loses only part of the touch response, unlike mec-4",
        "Arnadottir et al. 2011: classic full-Mec mec-10 alleles are gain-of-function")
 def _mec10():
-    from .genome import GENE_EFFECTS
-    m4 = GENE_EFFECTS["mec-4"].sensory_scale["touch"]
-    m10 = GENE_EFFECTS["mec-10"].sensory_scale["touch"]
-    return m10 > m4, f"touch gain mec-10={m10} > mec-4={m4}"
+    # Behavioural: count touch-evoked reversals over seeds for each genotype.
+    m4 = sum(touch_response("anterior", knockouts=["mec-4"], seed=s)["reversed"]
+             for s in range(4))
+    m10 = sum(touch_response("anterior", knockouts=["mec-10"], seed=s)["reversed"]
+              for s in range(4))
+    return m10 > m4, f"anterior-touch reversals over 4 seeds: mec-10 {m10}/4, mec-4 {m4}/4"
 
 
 @check("harsh touch survives mec-4 and keeps its direction",
@@ -297,8 +318,10 @@ def _goa1():
 
 
 @check("che-1 removes salt sensing but leaves odour intact",
-       "che-1 is the ASE terminal selector, so only gustation is lost",
-       "Uchida et al. 2003; WormBook Chemosensation")
+       "che-1 is the ASE terminal selector, so only gustation is lost; the "
+       "behavioural consequence is covered by the chemotaxis discrimination check",
+       "Uchida et al. 2003; WormBook Chemosensation",
+       section="consistency")
 def _che1():
     from .genome import Genome
     g = Genome.load()
@@ -311,16 +334,30 @@ def _che1():
        "tyramine loss leaves reversals but degrades the ventral omega turn",
        "Donnelly et al. 2013 PLoS Biol: 32% complete the omega vs wild type")
 def _tdc1():
-    from .genome import Genome
-    g = Genome.load()
-    g.knock_out("tdc-1")
-    return g.global_scale("omega_turn") < 0.5 and g.global_scale("head_suppression") == 0.0, \
-        f"omega gain {g.global_scale('omega_turn')}, head suppression {g.global_scale('head_suppression')}"
+    # Behavioural: poke, then count reversals and omega turns per genotype.
+    def run(kos):
+        s = _sim(kos)
+        for _ in range(500):
+            s.step()
+        for _ in range(5):
+            s.env.poke("anterior", 1.0, duration=0.4)
+            for _ in range(int(10.0 / s.cfg.dt)):
+                s.step()
+        return s.state.reversal_count, s.state.omega_count
+
+    wt_rev, wt_om = run(())
+    ko_rev, ko_om = run(("tdc-1",))
+    ok = wt_om >= 2 and ko_om == 0 and ko_rev >= wt_rev - 1
+    return ok, (f"wild type {wt_rev} reversals/{wt_om} omegas; "
+                f"tdc-1 {ko_rev} reversals/{ko_om} omegas")
 
 
-@check("swimming is faster than crawling",
-       "lowering the drag ratio from agar to water raises undulation speed",
-       "Berri et al. 2009; Fang-Yen et al. 2010 gait adaptation")
+@check("gait adapts to the medium: swimming is faster than crawling",
+       "lowering the drag ratio from agar to water raises undulation frequency "
+       "and speed in the animal; the scripted oscillator cannot do this",
+       "Berri et al. 2009; Fang-Yen et al. 2010 gait adaptation",
+       xfail="frequency is fixed at 0.47 Hz regardless of medium; gait "
+             "adaptation must emerge from the proprioceptive CPG (issue #10)")
 def _swim():
     crawl = gait()
     s = _sim(); s.env.drag_ratio = 1.6
@@ -330,9 +367,32 @@ def _swim():
     for _ in range(int(30.0 / s.cfg.dt)):
         s.step()
     swim = (s.state.distance - d0) / 30.0
-    return swim < crawl["speed"], \
+    return swim > crawl["speed"], \
         f"water {swim:.3f} vs agar {crawl['speed']:.3f} mm/s " \
-        f"(low drag ratio gives less thrust per stroke)"
+        f"(fixed gait: lower drag ratio gives less thrust per stroke)"
+
+
+@check("chemotaxis discriminates salt-blind mutants",
+       "wild type chemotaxes up a salt gradient; che-1 (no ASE) does not",
+       "Ward 1973; Bargmann & Horvitz 1991; Pierce-Shimomura et al. 1999",
+       xfail="no spontaneous reversals (issue #6) means no pirouettes, so the "
+             "biased random walk cannot exist and wild type scores no better "
+             "than che-1 from a random heading")
+def _chemo():
+    from .assays import run_assay
+    wt = run_assay("chemotaxis", knockouts=(), seed=0,
+                   minutes=2.0, replicates=3)["result"]
+    ko = run_assay("chemotaxis", knockouts=("che-1",), seed=0,
+                   minutes=2.0, replicates=3)["result"]
+    # The discrimination must clear both bars: wild type approaches, and the
+    # mutant does measurably worse. Thresholds are set just above what pure
+    # geometry scores, so passing requires genuine gradient-guided behaviour.
+    wt_min_ci, min_gap = 0.30, 0.25
+    ok = (wt["chemotaxis_index"] >= wt_min_ci
+          and wt["chemotaxis_index"] - ko["chemotaxis_index"] >= min_gap)
+    return ok, (f"wild type CI {wt['chemotaxis_index']} "
+                f"({wt['reversals_mean']} reversals/run), "
+                f"che-1 CI {ko['chemotaxis_index']}")
 
 
 @check("ablating the command interneurons reproduces their ablation phenotypes",
@@ -381,10 +441,11 @@ def _ablation():
                 f"no AVA/AVD/AVE {no_bwd_touch}, no ALM/AVM {no_trn_touch}")
 
 
-def _run_life(longevity: float = 1.0, temp: float = 20.0, dt: float = 60.0):
+def _run_life(longevity: float = 1.0, temp: float = 20.0, dt: float = 60.0,
+              seed: int = 0):
     """Run one animal from fertilised egg to death, without the neural sim."""
     from .lifecycle import Lifecycle
-    L = Lifecycle()
+    L = Lifecycle(seed=seed)
     marks: dict = {}
     t = 0.0
     while L.alive and t < 90 * 86400:
@@ -400,7 +461,8 @@ def _run_life(longevity: float = 1.0, temp: float = 20.0, dt: float = 60.0):
 @check("development timing egg to adult",
        "embryo ~14.2 h, then ~50.7 h from hatch to adult at 20 C",
        "Sulston et al. 1983 (800 min lineage clock); Faerberg, Gurarie & "
-       "Ruvinsky 2022 BMC Biol 20:87 (50.67 +/- 1.95 h hatch to adult)")
+       "Ruvinsky 2022 BMC Biol 20:87 (50.67 +/- 1.95 h hatch to adult)",
+       section="consistency")
 def _dev():
     L, m = _run_life()
     embryo = m.get("hatch", 0.0)
@@ -413,7 +475,8 @@ def _dev():
        "~300 self progeny over a ~5 day reproductive period, ending when the "
        "fixed store of self-sperm runs out rather than when oocytes do",
        "Hodgkin & Barnes 1991 (mean 327); Ward & Carrel 1979; Huang et al. "
-       "2004 (5.8 +/- 2.0 d fertile period)")
+       "2004 (5.8 +/- 2.0 d fertile period)",
+       section="consistency")
 def _brood():
     L, m = _run_life()
     period_d = (m.get("sperm_exhausted", 0.0) - m.get("adult", 0.0)) / 24.0
@@ -422,23 +485,30 @@ def _brood():
                 f"{L.self_sperm} sperm left")
 
 
-@check("the animal ages and dies",
-       "mean adult lifespan ~15 d at 20 C, preceded by decline in pumping and "
-       "locomotion class",
+@check("the animal ages and dies, on a distribution",
+       "mean adult lifespan ~15 d at 20 C with real spread across a cohort, "
+       "preceded by decline in pumping and locomotion class",
        "Huang, Xiong & Kornfeld 2004 PNAS (15.2 +/- 3.6 d); Herndon et al. "
        "2002 Nature (movement classes A/B/C)")
 def _death():
-    L, _ = _run_life()
-    ok = (not L.alive and L.cause_of_death == "senescence"
-          and 11.0 <= L.adult_day <= 20.0)
-    return ok, (f"died on adult day {L.adult_day:.1f} as class "
-                f"{L.movement_class}, cause {L.cause_of_death}")
+    # A cohort, not one animal: the check is on the distribution now that
+    # individual lifespans are drawn from the measured mean and SD.
+    days, causes = [], set()
+    for seed in range(6):
+        L, _ = _run_life(seed=seed)
+        days.append(L.adult_day)
+        causes.add(L.cause_of_death)
+    mean, sd = float(np.mean(days)), float(np.std(days))
+    ok = (causes == {"senescence"} and 13.0 <= mean <= 17.5 and sd > 0.5)
+    return ok, (f"cohort lifespans {[round(d, 1) for d in days]} d: "
+                f"mean {mean:.1f} d, sd {sd:.1f} d, causes {sorted(causes)}")
 
 
 @check("daf-2 longevity requires daf-16",
        "daf-2 loss roughly doubles lifespan, and removing daf-16 as well "
        "abolishes the extension completely; eat-2 does not need daf-16",
-       "Kenyon et al. 1993 Nature 366:461; Lakowski & Hekimi 1998 PNAS")
+       "Kenyon et al. 1993 Nature 366:461; Lakowski & Hekimi 1998 PNAS",
+       section="consistency")
 def _daf():
     from .genome import Genome
 
@@ -455,24 +525,58 @@ def _daf():
                 f"eat-2 x{e2:.2f} -> eat-2;daf-16 x{e2_16:.2f} (retained)")
 
 
-def main(verbose: bool = True) -> int:
-    passed = failed = 0
-    if verbose:
-        print("Validating modelled phenotypes against the literature\n")
-    for name, expectation, source, fn in CHECKS:
-        try:
-            ok, detail = fn()
-        except Exception as exc:
-            ok, detail = False, f"raised {type(exc).__name__}: {exc}"
-        passed += ok
-        failed += not ok
-        mark = "PASS" if ok else "FAIL"
+def _run_one(entry):
+    """Execute one check. Module-level so process-pool workers can pickle it."""
+    name, expectation, source, sect, xfail, fn = entry
+    try:
+        ok, detail = fn()
+    except Exception as exc:
+        ok, detail = False, f"raised {type(exc).__name__}: {exc}"
+    return ok, detail
+
+
+def main(verbose: bool = True, jobs: int = 1) -> int:
+    # The checks are independent simulations, so they parallelise cleanly.
+    # Results come back in registration order regardless of finish order.
+    if jobs > 1 and len(CHECKS) > 1:
+        from concurrent.futures import ProcessPoolExecutor
+        with ProcessPoolExecutor(max_workers=jobs) as pool:
+            results = list(pool.map(_run_one, CHECKS))
+    else:
+        results = [_run_one(c) for c in CHECKS]
+
+    passed = failed = xfailed = xpassed = 0
+    section = None
+    for (name, expectation, source, sect, xfail, fn), (ok, detail) in \
+            zip(CHECKS, results):
+        if sect != section:
+            section = sect
+            if verbose:
+                header = ("BEHAVIOURAL -- the animal is run and measured"
+                          if sect == "behaviour" else
+                          "CONSISTENCY -- parameters and data invariants, not validation")
+                print(f"\n== {header} ==")
+        if xfail is not None:
+            if ok:
+                xpassed += 1
+                mark = "XPASS"
+            else:
+                xfailed += 1
+                mark = "XFAIL"
+        else:
+            passed += ok
+            failed += not ok
+            mark = "PASS" if ok else "FAIL"
         if verbose:
             print(f"[{mark}] {name}")
             print(f"       expect: {expectation}")
             print(f"       got:    {detail}")
+            if xfail is not None:
+                print(f"       xfail:  {xfail}")
             print(f"       source: {source}\n")
-    print(f"{passed} passed, {failed} failed, {len(CHECKS)} total")
+    print(f"{passed} passed, {failed} failed, "
+          f"{xfailed} expected failures, {xpassed} unexpected passes, "
+          f"{len(CHECKS)} total")
     return 0 if failed == 0 else 1
 
 

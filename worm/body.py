@@ -46,6 +46,20 @@ class BodyParams:
     max_shortening = 0.28
 
 
+# Provenance tags for the parameter registry (worm/parameters.py). Citations
+# are in the comments above; the tag says how much to trust the number.
+PROVENANCE = {
+    "freq_hz": "measured",         # Cronin et al. 2005
+    "wavelength_bl": "measured",   # Cronin et al. 2005
+    "curvature_tau_s": "tuned",    # muscle low-pass, not measured
+    "curvature_gain": "tuned",     # fit to ~19% BL amplitude
+    "max_curvature": "tuned",
+    "drag_ratio": "published",     # RFT on agar, Gray & Lissmann line of work
+    "drag_tangential": "published",
+    "max_shortening": "tuned",     # fit to shrinker phenotype
+}
+
+
 class Body:
     def __init__(self, params: BodyParams | None = None, seed: int = 0) -> None:
         self.p = params or BodyParams()

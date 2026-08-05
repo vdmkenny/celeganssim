@@ -53,6 +53,28 @@ class SimConfig:
     life_speedup: float = 400.0
 
 
+# Provenance tags for the parameter registry (worm/parameters.py). Most of
+# SimConfig is behavioural glue, honestly tagged: these are the knobs a
+# mechanistic replacement (issues #6, #7, #10) is expected to delete.
+PROVENANCE = {
+    "dt": "tuned",                # numerical, body/world step
+    "neural_substeps": "tuned",   # numerical, 1 ms neural step
+    "neural_noise": "tuned",
+    "sensory_amplitude": "tuned", # too large vs measured receptor potentials (issue #12)
+    "reversal_threshold": "tuned",
+    "baseline_tau_s": "tuned",
+    "reversal_min_s": "tuned",
+    "reversal_max_s": "tuned",
+    "omega_s": "tuned",
+    "refractory_s": "tuned",
+    "tonic_forward": "scripted",  # stands in for AVB->B tonic drive
+    "command_gain": "tuned",
+    "seed": "tuned",
+    "start_adult": "tuned",
+    "life_speedup": "tuned",      # display convenience, not biology
+}
+
+
 @dataclass
 class SimState:
     t: float = 0.0
@@ -79,17 +101,17 @@ class WormSimulation:
         self.body = Body(BodyParams(), seed=self.cfg.seed)
         self.rng = np.random.default_rng(self.cfg.seed)
         from .lifecycle import Lifecycle
-        self.life = Lifecycle()
+        self.life = Lifecycle(seed=self.cfg.seed)
         if self.cfg.start_adult:
             # Skip development, but still run what the L4/adult moult does:
             # spermatogenesis happens once, there, and nothing else makes
-            # sperm afterwards.
+            # sperm afterwards. Lifespan is drawn as at the moult.
             from .lifecycle import SELF_SPERM
             self.life.stage = "adult"
             self.life.reserves = 0.7
             self.life.self_sperm = SELF_SPERM
-            self.life.lifespan_d = (
-                self.life.lifespan_d * self.genome.longevity_scale())
+            self.life.lifespan_d = self.life.draw_lifespan(
+                self.genome.longevity_scale())
         self.body.set_length(self.life.body_length_mm)
         self.events: list[tuple[float, str]] = []
 

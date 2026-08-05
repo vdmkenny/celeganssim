@@ -22,6 +22,46 @@ from .simulation import SimConfig, WormSimulation
 ASSAYS: dict[str, "Assay"] = {}
 
 
+def _torus_dist(a: np.ndarray, b: np.ndarray, width: float, height: float) -> float:
+    """Minimum-image distance on the toroidal arena.
+
+    The arena wraps, so the naive Euclidean distance is wrong for any pair
+    separated by more than half a dimension: a worm that crosses a boundary
+    is close to its target on the torus while being far from it on the page.
+    """
+    d = np.abs(np.asarray(a, dtype=float) - np.asarray(b, dtype=float))
+    d[0] = min(d[0], width - d[0])
+    d[1] = min(d[1], height - d[1])
+    return float(np.hypot(d[0], d[1]))
+
+
+# Chemotaxis assay geometry. The classic assay is a population count in scoring
+# regions of a 10 cm plate (Ward 1973; Bargmann & Horvitz 1991); the
+# single-animal version here is a time-fraction analogue, so the geometry is a
+# modelling choice -- but a named one, expressed relative to the arena so it
+# cannot silently drift from the physics.
+CHEMO_ARENA = (60.0, 44.0)          # assay plate, mm (several body lengths across)
+CHEMO_SOURCE_XY = (16.0, 0.0)       # peak of the gradient, off-centre
+CHEMO_SOURCE_SIGMA_MM = 14.0        # Gaussian spread of the salt source
+CHEMO_START_RING_MM = 28.0          # animals start on a ring this far from the peak
+CHEMO_NEAR_BAND_MM = 16.0           # inside this counts as "at the peak"
+CHEMO_FAR_BAND_MM = 32.0            # beyond this counts as "avoiding the peak"
+CHEMO_RUN_MINUTES = 5.0             # per replicate
+CHEMO_REPLICATES = 6                # randomized starts/headings per condition
+
+# Provenance tags for the parameter registry (worm/parameters.py).
+CONST_PROVENANCE = {
+    "CHEMO_ARENA": "assay",
+    "CHEMO_SOURCE_XY": "assay",
+    "CHEMO_SOURCE_SIGMA_MM": "assay",
+    "CHEMO_START_RING_MM": "assay",
+    "CHEMO_NEAR_BAND_MM": "assay",
+    "CHEMO_FAR_BAND_MM": "assay",
+    "CHEMO_RUN_MINUTES": "assay",
+    "CHEMO_REPLICATES": "assay",
+}
+
+
 @dataclass
 class Assay:
     name: str
@@ -50,49 +90,88 @@ def _build(knockouts=(), ablations=(), seed=0, **env_kw) -> WormSimulation:
 
 
 # --------------------------------------------------------------------------
+def _chemo_run(task):
+    """One chemotaxis replicate: random ring start, random heading.
+
+    Module-level so process-pool workers can pickle it. Start geometry is
+    drawn by the caller (seeded there) so results do not depend on how many
+    workers happen to run.
+    """
+    knockouts, ablations, seed, minutes, start_xy, heading, theta = task
+    sim = _build(knockouts, ablations, seed,
+                 width=CHEMO_ARENA[0], height=CHEMO_ARENA[1])
+    peak = np.array(CHEMO_SOURCE_XY)
+    sim.env.add_source(peak[0], peak[1], kind="salt", strength=1.0,
+                       sigma=CHEMO_SOURCE_SIGMA_MM)
+    sim.reset(x=float(start_xy[0]), y=float(start_xy[1]), heading=heading)
+
+    steps = int(minutes * 60.0 / sim.cfg.dt)
+    near = far = 0
+    d0 = _torus_dist(sim.body.X, peak, sim.env.width, sim.env.height)
+    for _ in range(steps):
+        sim.step()
+        d = _torus_dist(sim.body.X, peak, sim.env.width, sim.env.height)
+        if d < CHEMO_NEAR_BAND_MM:
+            near += 1
+        elif d > CHEMO_FAR_BAND_MM:
+            far += 1
+    d1 = _torus_dist(sim.body.X, peak, sim.env.width, sim.env.height)
+    ci = (near - far) / max(near + far, 1)
+    return {"ci": round(ci, 3), "reversals": sim.state.reversal_count,
+            "approached_mm": round(d0 - d1, 2),
+            "start_deg": round(float(np.degrees(theta)), 1)}
+
+
 @assay("chemotaxis",
-       metric="chemotaxis index, (N_near - N_far) / N_total",
+       metric="chemotaxis index, (N_near - N_far) / N_total, mean +/- sd over "
+             "replicates with randomized starts and headings",
        expected="wild type strongly positive (~0.5 or above) to NaCl; che-1 "
                 "and tax-4 near zero",
        source="Ward 1973; Bargmann & Horvitz 1991; Pierce-Shimomura et al. 1999",
        description="Place the animal in a salt gradient and score where it "
                    "spends its time relative to the peak.")
-def _chemotaxis(knockouts=(), ablations=(), seed=0, minutes=8.0) -> dict:
-    """Classic population assay run on one animal over time.
+def _chemotaxis(knockouts=(), ablations=(), seed=0, minutes=CHEMO_RUN_MINUTES,
+                replicates=CHEMO_REPLICATES, workers=1) -> dict:
+    """Classic population assay run on one animal over time, replicated.
 
     The chemotaxis index is normally counts of animals in a scoring region;
     with one animal the time-equivalent is the fraction of the run spent in
-    the near half versus the far half of the gradient.
-    """
-    sim = _build(knockouts, ablations, seed, width=60.0, height=44.0)
-    peak = np.array([16.0, 0.0])
-    sim.env.add_source(peak[0], peak[1], kind="salt", strength=1.0, sigma=14.0)
-    sim.reset(x=-16.0, y=0.0, heading=0.0)
+    the near band versus the far band of the gradient.
 
-    steps = int(minutes * 60.0 / sim.cfg.dt)
-    near = far = 0
-    d0 = float(np.linalg.norm(sim.body.X - peak))
-    track = []
-    for i in range(steps):
-        sim.step()
-        d = float(np.linalg.norm(sim.body.X - peak))
-        if i % 25 == 0:
-            track.append(round(d, 2))
-        if d < 16.0:
-            near += 1
-        elif d > 32.0:
-            far += 1
-    total = max(near + far, 1)
-    ci = (near - far) / total
-    d1 = float(np.linalg.norm(sim.body.X - peak))
-    return {"chemotaxis_index": round(ci, 3),
-            "start_distance_mm": round(d0, 2),
-            "end_distance_mm": round(d1, 2),
-            "approached_mm": round(d0 - d1, 2),
-            "reversals": sim.state.reversal_count,
-            "omega_turns": sim.state.omega_count,
-            "distance_travelled_mm": round(sim.state.distance, 1),
-            "distance_track": track[:60]}
+    Each replicate starts on a ring around the peak at a random angle with a
+    random heading. An earlier version started the animal pointing directly
+    at the peak, which returns a near-perfect index even for a salt-blind
+    mutant -- the assay must be able to fail, or it measures nothing.
+    Distances are torus-aware because the arena wraps.
+    """
+    peak = np.array(CHEMO_SOURCE_XY)
+    tasks = []
+    for r in range(replicates):
+        rng = np.random.default_rng(1000 + seed * 100 + r)
+        theta = rng.uniform(0.0, 2.0 * np.pi)
+        start = peak + CHEMO_START_RING_MM * np.array([np.cos(theta), np.sin(theta)])
+        heading = rng.uniform(0.0, 2.0 * np.pi)
+        tasks.append((tuple(knockouts), tuple(ablations), seed + r, minutes,
+                      tuple(start), heading, theta))
+    if workers != 1 and replicates > 1:
+        from concurrent.futures import ProcessPoolExecutor
+        with ProcessPoolExecutor(max_workers=workers or None) as pool:
+            runs = list(pool.map(_chemo_run, tasks))
+    else:
+        runs = [_chemo_run(t) for t in tasks]
+    cis = [r["ci"] for r in runs]
+    revs = [r["reversals"] for r in runs]
+    approaches = [r["approached_mm"] for r in runs]
+    return {"chemotaxis_index": round(float(np.mean(cis)), 3),
+            "chemotaxis_index_sd": round(float(np.std(cis)), 3),
+            "replicates": replicates,
+            "per_run": runs,
+            "reversals_mean": round(float(np.mean(revs)), 2),
+            "approached_mm_mean": round(float(np.mean(approaches)), 2),
+            "reversal_note": ("0 reversals means no pirouettes: the biased "
+                              "random walk is absent, so any positive index "
+                              "here came from geometry or steering, not the "
+                              "Pierce-Shimomura mechanism")}
 
 
 @assay("thermotaxis",
@@ -147,7 +226,10 @@ def _habituation(knockouts=(), ablations=(), seed=0, taps=12,
             "first_half_rate": round(sum(responses[:half]) / half, 3),
             "second_half_rate": round(sum(responses[half:]) /
                                       max(len(responses) - half, 1), 3),
-            "habituated": bool(sum(responses[half:]) < sum(responses[:half]))}
+            "habituated": bool(sum(responses[half:]) < sum(responses[:half])),
+            "note": ("the model has no short-term synaptic plasticity yet "
+                     "(issue #8), so habituation cannot emerge; a flat "
+                     "response vector is the expected current result")}
 
 
 @assay("basal-slowing",
@@ -240,6 +322,11 @@ def run_assay(name: str, **kw) -> dict:
     if name not in ASSAYS:
         raise KeyError(f"unknown assay {name!r}; have {sorted(ASSAYS)}")
     a = ASSAYS[name]
+    # Forward only the kwargs this assay accepts, so shared options (workers,
+    # seed) can be passed without every assay having to take them.
+    import inspect
+    sig = inspect.signature(a.run)
+    kw = {k: v for k, v in kw.items() if k in sig.parameters}
     result = a.run(**kw)
     return {"assay": a.name, "metric": a.metric, "expected": a.expected,
             "source": a.source, "result": result}

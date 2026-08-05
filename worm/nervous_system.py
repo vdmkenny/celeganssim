@@ -102,6 +102,32 @@ class NeuralParams:
     tau_w = 850.0     # slow-current time constant, ms -> ~0.5 Hz rhythm
 
 
+# Provenance tags for the parameter registry (worm/parameters.py). The
+# intrinsic-oscillator block is disabled by default; its tags reflect that
+# only E_Ca and E_K are anchored to measurement.
+PROVENANCE = {
+    "C": "measured",        # Goodman et al. 1998; Liu et al. 2018 Table S4
+    "G_leak": "measured",   # R_in 1.6-8 GOhm: Goodman 1998; Shindou 2019
+    "E_cell": "measured",   # AWA fit, Liu et al. 2018
+    "g_gap": "measured",    # Liu et al. 2017/2020 pair coupling (within 1.6x)
+    "g_syn": "published",   # Kunert et al. 2014 contact conductance
+    "E_exc": "published",
+    "E_inh": "published",   # Wicks et al. 1996 Table 1
+    "beta": "published",    # Kunert et al. 2014
+    "a_r": "published",     # Wicks/Kunert, 1.5x time rescale
+    "a_d": "published",
+    "g_Ca": "tuned",        # intrinsic oscillator: no measured conductance
+    "E_Ca": "measured",     # Jospin et al. 2002 (+50..+59 mV in muscle)
+    "V_Ca": "tuned",
+    "k_Ca": "tuned",
+    "g_K": "tuned",
+    "E_K": "measured",      # -80..-84.5 mV, Liu et al. 2014 solutions
+    "V_K": "tuned",
+    "k_K": "tuned",
+    "tau_w": "tuned",
+}
+
+
 class NervousSystem:
     def __init__(self, conn: Connectome, genome: Genome,
                  params: NeuralParams | None = None, seed: int = 0) -> None:

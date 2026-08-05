@@ -2,7 +2,7 @@
 
 A whole-organism simulator for *Caenorhabditis elegans*.
 
-It simulates all 302 neurons and 95 body-wall muscles over the published
+It simulates all 300 neurons and 95 body-wall muscles over the published
 electron-microscopy connectome, drives a biomechanical body through a viscous
 medium, and runs the animal from a fertilised egg through four larval stages to
 senescence and death. You can poke it anywhere on its body, knock out genes by
@@ -31,7 +31,8 @@ processed files.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 23 checks against published measurements
+worm validate         # 24 checks against published measurements, in parallel
+worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
 worm info             # genome and connectome summary
@@ -172,7 +173,8 @@ lands on measured resting potentials.
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 23 checks against the literature |
+| `worm/validate.py` | 24 checks: 19 behavioural, 5 consistency, gaps as expected failures |
+| `worm/parameters.py` | audited parameter registry with provenance tags |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
 ---
@@ -198,27 +200,40 @@ rather than making it, so are not modelled as GABAergic.
 
 ## Validation
 
-`worm validate` runs 23 checks against published measurements. All 23 pass.
+`worm validate` runs 24 checks against published measurements: 19 behavioural
+(the animal is run and measured) and 5 consistency checks (parameter and data
+invariants). 22 pass. The 2 failures are known gaps, reported as expected
+failures and tracked, not hidden: without spontaneous reversals there are no
+pirouettes, so chemotaxis cannot yet discriminate salt-blind mutants
+([issue #6](https://github.com/vdmkenny/celeganssim/issues/6)), and the
+fixed-frequency oscillator cannot adapt gait to the medium
+([issue #10](https://github.com/vdmkenny/celeganssim/issues/10)). When those
+issues are fixed, the checks flip from XFAIL to PASS and the suite will say so.
 
 | Check | Model | Published |
 |---|---|---|
 | Input resistance | 4.0 GOhm | 1.6 to 8 GOhm |
 | Membrane time constant | 6.0 ms | 3 to 10 ms |
-| AVAL-AVAR gap coupling | 90 pS | 56 pS |
+| AVAL-AVAR gap coupling | 90 pS (1.6x high) | 56 pS |
 | VA5 / VB6 resting potential | -71.7 / -53.2 mV | -71.7 / -53.2 mV |
 | Crawling speed | 0.239 mm/s | 0.20 +/- 0.04 mm/s |
 | Undulation amplitude | 21.2% body length | 19.3% |
 | Embryogenesis | 14.2 h | 14.2 h |
 | Hatch to adult | 50.8 h | 50.67 +/- 1.95 h |
-| Adult lifespan | 15.2 d | 15.2 +/- 3.6 d |
+| Adult lifespan | mean 15.9 d, sd 3.3 d over a cohort | 15.2 +/- 3.6 d |
 | Self-fertile brood | 300 | ~327, sperm-limited |
-| `daf-2` lifespan | 30.4 d | ~29.5 d |
+| `daf-2` lifespan | 31.3 d (2x the animal's own draw) | ~29.5 d |
 
-The remainder are behavioural: touch responses by body position, the `mec-4` and
-`mec-10` dissociation, the `unc-25`/`unc-47`/`unc-49` shrinker class, `unc-13`
-paralysis, the opposing `goa-1` and `egl-30` phenotypes, `che-1` modality
-specificity, `tdc-1` omega-turn defects, command-interneuron ablation, and
-`daf-16` epistasis.
+The other behavioural checks cover touch responses by body position, the
+`mec-4`/`mec-10` dissociation, the `unc-25`/`unc-47`/`unc-49` shrinker class,
+`unc-13` paralysis, the opposing `goa-1` and `egl-30` phenotypes, `tdc-1`
+omega-turn loss, and command-interneuron ablation. The consistency checks pin
+the `daf-16` epistasis, `che-1` modality gating, developmental timings, and
+the sperm-limited brood.
+
+Every parameter the model is told is collected in one audited registry
+(`worm params`), tagged measured, published, tuned or scripted; the scripted
+tags are the ones the open issues exist to delete.
 
 Independently, the 26 GABAergic neurons the pipeline derives from transmitter
 data match the known count exactly (6 DD + 13 VD + 4 RME + AVL + DVB + RIS).

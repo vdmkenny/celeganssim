@@ -90,7 +90,8 @@ def cmd_assay(a) -> int:
     out = []
     for n in names:
         kw = {"knockouts": tuple(a.knockout or ()),
-              "ablations": tuple(a.ablate or ()), "seed": a.seed}
+              "ablations": tuple(a.ablate or ()), "seed": a.seed,
+              "workers": a.jobs if a.jobs > 0 else None}
         rec = run_assay(n, **kw)
         out.append(rec)
         if not a.json:
@@ -207,8 +208,16 @@ def cmd_batch(a) -> int:
 
 
 def cmd_validate(a) -> int:
-    from .validate import main as run_validation
-    return run_validation(verbose=not a.quiet)
+    from .validate import CHECKS, main as run_validation
+    import os
+    jobs = a.jobs if a.jobs > 0 else min(os.cpu_count() or 1, len(CHECKS))
+    return run_validation(verbose=not a.quiet, jobs=jobs)
+
+
+def cmd_params(a) -> int:
+    from .parameters import audit
+    print(audit())
+    return 0
 
 
 def main(argv=None) -> int:
@@ -243,6 +252,8 @@ def main(argv=None) -> int:
     s.add_argument("--knockout", action="append", metavar="GENE")
     s.add_argument("--ablate", action="append", metavar="CELL")
     s.add_argument("--seed", type=int, default=0)
+    s.add_argument("--jobs", type=int, default=0,
+                   help="parallel workers for replicated assays; 0 = all cores")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_assay)
 
@@ -269,7 +280,12 @@ def main(argv=None) -> int:
 
     s = sub.add_parser("validate", help="check modelled phenotypes against the literature")
     s.add_argument("--quiet", action="store_true")
+    s.add_argument("--jobs", type=int, default=0,
+                   help="parallel workers; 0 = one per check, up to core count")
     s.set_defaults(fn=cmd_validate)
+
+    s = sub.add_parser("params", help="audit every model parameter and its provenance")
+    s.set_defaults(fn=cmd_params)
 
     a = p.parse_args(argv)
     return a.fn(a)

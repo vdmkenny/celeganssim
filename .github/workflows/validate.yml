@@ -1,0 +1,36 @@
+name: validate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Datasets are fetched from their publishers, never vendored (see
+      # scripts/fetch_data.py). Cache the ~43 MB download; bump the key if
+      # the dataset list or build pipeline changes.
+      - name: Cache datasets
+        uses: actions/cache@v4
+        with:
+          path: data/
+          key: celeganssim-data-v1
+
+      - name: Install dependencies
+        run: pip install numpy
+
+      - name: Fetch and build datasets
+        run: python scripts/fetch_data.py
+
+      # Expected-failure (xfail) checks report known gaps but do not fail the
+      # run; an unexpected pass (XPASS) means a gap closed and the suite says
+      # so. Exit code is non-zero only on a real regression.
+      - name: Validate against published measurements
+        run: python -m worm validate --quiet
