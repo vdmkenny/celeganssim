@@ -149,7 +149,9 @@ class NervousSystem:
         for i, nts in enumerate(self.conn.pre_nt):
             if not nts:
                 continue
-            scale[i] = float(np.mean([g.nt_scale(nt) for nt in nts]))
+            # Per-cell, so a knockout only touches cells that express the gene.
+            cell = self.conn.names[i]
+            scale[i] = float(np.mean([g.nt_scale_in_cell(nt, cell) for nt in nts]))
         global_syn = g.global_scale("chemical_synapse")
 
         # Gs[post, pre] -> scaling is per presynaptic cell, so scale columns.

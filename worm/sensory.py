@@ -159,9 +159,10 @@ class SensorySystem:
         self.last: dict[str, float] = {}
 
     def _gain(self, modality: str) -> float:
+        cells = SENSORS.get(modality, ())
         g = 1.0
         for key in GATE.get(modality, ()):
-            g *= self.genome.sensory_scale(key)
+            g *= self.genome.sensory_scale_in_cells(key, cells)
         return g
 
     def compute(self, env: Environment, head: np.ndarray, tail: np.ndarray,

@@ -308,13 +308,77 @@ class Genome:
         self.stats = stats
         self.knockouts: set[str] = set()
         self._lower = {k.lower(): k for k in genes}
+        self.expression: dict[str, set[str]] = {}
+        self.expression_source = ""
 
     @classmethod
     def load(cls, data_dir: Path | None = None) -> "Genome":
         d = Path(data_dir) if data_dir is not None else _data_dir()
         genes = json.loads((d / "genes.json").read_text())
         stats = json.loads((d / "genome_stats.json").read_text())
-        return cls(genes, stats)
+        g = cls(genes, stats)
+        # Optional: measured single-cell expression, which makes knockouts
+        # cell-specific instead of global. Absent, everything still works, just
+        # more coarsely.
+        exp_path = d / "expression.json"
+        if exp_path.exists():
+            payload = json.loads(exp_path.read_text())
+            g.expression = {k: set(v["cells"]) for k, v in payload["genes"].items()}
+            g.expression_source = payload.get("source", "")
+        return g
+
+    def expressed_in(self, gene: str) -> set[str] | None:
+        """Cells expressing this gene, or None if there is no measurement.
+
+        None means "unknown", not "nowhere": callers fall back to applying the
+        effect globally rather than silently doing nothing.
+        """
+        return self.expression.get(gene)
+
+    def expresses(self, gene: str, cell: str) -> bool:
+        cells = self.expressed_in(gene)
+        return True if cells is None else (cell in cells)
+
+    def nt_scale_in_cell(self, neurotransmitter: str, cell: str) -> float:
+        """Transmitter scaling for one cell, honouring where genes are expressed.
+
+        This is the difference between "unc-25 removes GABA" and "unc-25 removes
+        GABA from the 28 cells that actually transcribe it". With CeNGEN loaded,
+        a knockout reaches exactly the cells the gene is measured in.
+        """
+        scale = 1.0
+        for g in sorted(self.knockouts):
+            eff = GENE_EFFECTS.get(g)
+            if not eff:
+                continue
+            v = eff.neurotransmitter_scale.get(neurotransmitter)
+            if v is None or not self.expresses(g, cell):
+                continue
+            scale = min(scale, v) if v <= 1 else scale * v
+        return scale
+
+    def sensory_scale_in_cells(self, modality_key: str, cells) -> float:
+        """Sensory gating, restricted to genes expressed in the sensing cells.
+
+        A gene only gates a modality if it is actually transcribed in at least
+        one of the cells carrying it. That is what makes harsh touch survive a
+        mec-4 knockout without a special case: MEC-4 is simply not expressed in
+        PVD or FLP.
+        """
+        cells = set(cells)
+        scale = 1.0
+        for g in sorted(self.knockouts):
+            eff = GENE_EFFECTS.get(g)
+            if not eff:
+                continue
+            v = eff.sensory_scale.get(modality_key)
+            if v is None:
+                continue
+            expressed = self.expressed_in(g)
+            if expressed is not None and cells and not (cells & expressed):
+                continue      # measured: this gene is not in these cells
+            scale = min(scale, v) if v <= 1 else scale * v
+        return scale
 
     # -- lookup ---------------------------------------------------------
     def resolve(self, name: str) -> str | None:

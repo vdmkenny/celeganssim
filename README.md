@@ -18,10 +18,29 @@ a fertilised egg, feeds, ages and dies.
 **On the genome, precisely.** The WBcel235 *annotation* is load-bearing: gene
 lookup, real WormBase IDs and coordinates, and the knockout system are all driven
 by it. The 100 Mb of *sequence* is not. It yields chromosome lengths and GC
-content and nothing else. Gene effects are a curated table of 31 loci mapped onto
-subsystems, not molecular simulation, so "knock out `unc-25` and GABA synthesis
-stops" is a modelled consequence rather than a derived one. This is a behavioural
-model with a genuine annotation layer, not a genome-to-phenotype engine.
+content and nothing else, and going from base pairs to behaviour is not
+computable for any animal. This is a behavioural model with a real annotation
+layer, not a genome-to-phenotype engine.
+
+What the genetics layer *does* rest on is measured **single-cell expression**.
+CeNGEN scRNA-seq (Taylor et al. 2021, via the wormneuroatlas API) says which of
+the 128 neuron classes transcribe each gene, so a knockout reaches exactly the
+cells that express it rather than scaling a transmitter everywhere:
+
+| Gene | Cells it is measured in |
+|---|---|
+| `mec-4` | ALML, ALMR, AVM, PLML, PLMR, PVM (the six touch receptor neurons) |
+| `che-1` | ASEL, ASER |
+| `cat-2` | ADE, CEP and PDE (the eight dopaminergic neurons) |
+| `unc-25` | 28 cells: DD1-6, VD1-13, RME x4, AVL, DVB, RIS, RIB |
+
+Two things that were previously hand-written now fall out of the data. `mec-4` is
+simply not expressed in PVD or FLP, so harsh touch survives a `mec-4` knockout
+without a rule saying it should. And AVA and AVB, which stain GABA-positive but
+lack `unc-25`, are correctly left untouched by an `unc-25` knockout.
+
+The mapping from a gene to *what its loss does* is still a curated table of 31
+loci, and that part is modelled, not derived.
 
 ```bash
 python -m worm serve                    # live viewer at http://127.0.0.1:8080
