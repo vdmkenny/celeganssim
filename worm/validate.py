@@ -113,6 +113,47 @@ def _post():
         f"reversed={r['reversed']}, speed {r['speed_after']:.3f} vs baseline {base:.3f}"
 
 
+@check("touch is positional, not bucketed",
+       "the ALM and PLM receptive fields cross over near mid-body, so anterior "
+       "touch drives the anterior cells and posterior touch the posterior ones",
+       "Chalfie & Sulston 1981; Chalfie et al. 1985; WormAtlas TRNs")
+def _fields():
+    from .sensory import TOUCH_FIELDS, _field_coverage
+    alm = next(f for f in TOUCH_FIELDS if f["cells"][0] == "ALML")
+    plm = next(f for f in TOUCH_FIELDS if f["cells"][0] == "PLML")
+
+    def cov(f, u):
+        return _field_coverage(u, f["start"], f["end"], f["soft"])
+
+    avm = next(f for f in TOUCH_FIELDS if f["cells"][0] == "AVM")
+
+    def ant(u):   # the anterior touch system is ALM together with AVM
+        return max(cov(alm, u), cov(avm, u))
+
+    # Locate where anterior and posterior coverage actually cross over.
+    us = [i / 200 for i in range(201)]
+    crossover = min(us, key=lambda u: abs(ant(u) - cov(plm, u)) if u > 0.2 else 9)
+
+    ok = (ant(0.2) > 0.8 and cov(plm, 0.2) < 0.1          # head: anterior only
+          and cov(plm, 0.85) > 0.8 and ant(0.85) < 0.1    # tail: posterior only
+          and 0.45 <= crossover <= 0.65)                  # they meet mid-body
+    return ok, (f"crossover at u={crossover:.2f}; "
+                f"u=0.20 ant {ant(0.2):.2f}/post {cov(plm,0.2):.2f}; "
+                f"u=0.85 ant {ant(0.85):.2f}/post {cov(plm,0.85):.2f}")
+
+
+@check("mid-body touch is the ambiguous zone",
+       "a mid-body stroke lands where the anterior and posterior fields meet, "
+       "so it does not reliably drive a reversal the way a head stroke does",
+       "Chalfie et al. 1985: ALM and PLM processes overlap around mid-body")
+def _midbody():
+    head = sum(touch_response("anterior", seed=s)["reversed"] for s in range(3))
+    mid = sum(touch_response("midbody", seed=s)["reversed"] for s in range(3))
+    tail = sum(touch_response("posterior", seed=s)["reversed"] for s in range(3))
+    return head > mid >= tail or (head == 3 and mid < 3 and tail == 0), \
+        f"reversals over 3 seeds: head {head}/3, mid-body {mid}/3, tail {tail}/3"
+
+
 @check("mec-4 is touch insensitive",
        "mec-4 nulls do not respond to gentle body touch",
        "Chalfie & Sulston 1981; Arnadottir et al. 2011 J Neurosci")

@@ -103,10 +103,23 @@ class SimRunner:
             sim, env = self.sim, self.sim.env
             try:
                 if cmd == "poke":
-                    env.poke(msg.get("region", "anterior"),
-                             float(msg.get("strength", 1.0)),
-                             float(msg.get("duration", 0.3)))
-                    return {"ok": True, "msg": f"poked {msg.get('region')}"}
+                    where = msg.get("region", msg.get("u", "anterior"))
+                    if not isinstance(where, str):
+                        where = float(where)
+                    env.poke(where, float(msg.get("strength", 1.0)),
+                             float(msg.get("duration", 0.3)),
+                             harsh=msg.get("harsh"))
+                    return {"ok": True, "msg": f"poked {where}"}
+                if cmd == "poke_at":
+                    hit = sim.poke_at(float(msg["x"]), float(msg["y"]),
+                                      strength=float(msg.get("strength", 1.0)),
+                                      harsh=msg.get("harsh"))
+                    if hit is None:
+                        return {"ok": False, "msg": "missed the worm"}
+                    kind = "harsh prod" if hit["harsh"] else "gentle touch"
+                    pct = round(hit["u"] * 100)
+                    return {"ok": True, "hit": hit,
+                            "msg": f"{kind} at {pct}% along the body"}
                 if cmd == "add_source":
                     env.add_source(float(msg["x"]), float(msg["y"]),
                                    kind=msg.get("kind", "salt"),
@@ -176,6 +189,15 @@ def make_handler(runner: SimRunner):
                     self._send(500, b"viewer/index.html missing", "text/plain")
                     return
                 self._send(200, VIEWER.read_bytes(), "text/html; charset=utf-8")
+            elif self.path == "/network":
+                # Static graph, fetched once. Only the activity vector is
+                # streamed per frame.
+                conn = runner.sim.conn
+                payload = dict(conn.layout())
+                payload["edges"] = conn.edge_list(min_weight=3.0)
+                payload["index"] = conn.names
+                self._send(200, json.dumps(payload, separators=(",", ":")).encode(),
+                           "application/json")
             elif self.path == "/genes":
                 cat = [{"gene": g, "product": e.product, "phenotype": e.phenotype}
                        for g, e in sorted(GENE_EFFECTS.items())]

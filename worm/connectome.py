@@ -180,6 +180,115 @@ class Connectome:
         order = np.argsort(col)[::-1]
         return [(self.names[j], float(col[j])) for j in order[:top] if col[j] > 0]
 
+    # -- layout ---------------------------------------------------------
+    def layer_of(self, name: str) -> int:
+        """Place a cell in the sensory -> interneuron -> motor -> muscle chain.
+
+        Many cells carry more than one role (plenty of head neurons are both
+        sensory and interneuron), so roles are checked in signal-flow order and
+        the first match wins.
+        """
+        info = self.cell_info[name]
+        if info["kind"] == "muscle":
+            return 3
+        # Ventral cord motor neurons are motor output, whatever else they do.
+        # The B-class in particular is annotated sensory as well, correctly:
+        # they are proprioceptive, and that stretch feedback is what propagates
+        # the undulatory wave (Wen et al. 2012). That is an internal sense, not
+        # an external modality, so it should not pull them into the input layer.
+        if info.get("vnc_class"):
+            return 2
+        roles = info.get("roles") or []
+        if "sensory" in roles:
+            return 0
+        if "interneuron" in roles:
+            return 1
+        if "motor" in roles:
+            return 2
+        return 1
+
+    def layout(self) -> dict:
+        """A layered drawing of the network, ordered to keep it readable.
+
+        Columns are the signal-flow layers. Within a column, cells are ordered
+        by the average position of what they connect to in the next column
+        (the barycentre heuristic from layered graph drawing), which pulls
+        connected cells level with each other and cuts down edge crossings.
+        Muscles are the fixed anchor: dorsal rows above, ventral below, head to
+        tail left to right, matching the body.
+        """
+        cols: dict[int, list[str]] = {0: [], 1: [], 2: [], 3: []}
+        for n in self.names:
+            cols[self.layer_of(n)].append(n)
+
+        # Anchor: muscles in anatomical order.
+        def muscle_key(n):
+            c = self.cell_info[n]
+            return (0 if c.get("side") == "dorsal" else 1, c.get("row", 0),
+                    c.get("lr", ""))
+        cols[3].sort(key=muscle_key)
+
+        order: dict[str, float] = {}
+        for i, n in enumerate(cols[3]):
+            order[n] = i / max(len(cols[3]) - 1, 1)
+
+        # Work right to left, placing each layer by where its targets sit.
+        undirected = self.Gs + self.Gs.T + self.Gg
+        for layer in (2, 1, 0):
+            nxt = set(cols[layer + 1])
+            bary = {}
+            for n in cols[layer]:
+                i = self.index[n]
+                num = den = 0.0
+                for m in nxt:
+                    w = undirected[self.index[m], i]
+                    if w > 0:
+                        num += w * order[m]
+                        den += w
+                bary[n] = num / den if den else 0.5
+            cols[layer].sort(key=lambda n: (bary[n], n))
+            for i, n in enumerate(cols[layer]):
+                order[n] = i / max(len(cols[layer]) - 1, 1)
+
+        xs = {0: 0.06, 1: 0.34, 2: 0.63, 3: 0.92}
+        nodes = []
+        for layer, names in cols.items():
+            for i, n in enumerate(names):
+                info = self.cell_info[n]
+                nodes.append({
+                    "n": n,
+                    "x": xs[layer],
+                    "y": round(0.03 + 0.94 * (i / max(len(names) - 1, 1)), 5),
+                    "layer": layer,
+                    "kind": info["kind"],
+                    "nt": (info.get("neurotransmitters") or [None])[0],
+                    "side": info.get("side"),
+                })
+        return {"nodes": nodes,
+                "layers": ["sensory", "interneuron", "motor", "muscle"]}
+
+    def edge_list(self, min_weight: float = 3.0) -> list:
+        """Edges worth drawing, as [pre_index, post_index, weight, is_gap].
+
+        Thresholded because the full 7,379-edge graph redrawn every frame is
+        both slow and unreadable; the weak tail carries little signal.
+        """
+        out = []
+        n = self.n
+        for i in range(n):
+            for j in range(n):
+                w = self.Gs[j, i]
+                if w >= min_weight:
+                    out.append([i, j, round(float(w), 1), 0])
+        seen = set()
+        for i in range(n):
+            for j in range(n):
+                w = self.Gg[j, i]
+                if w >= min_weight and (j, i) not in seen:
+                    seen.add((i, j))
+                    out.append([i, j, round(float(w), 1), 1])
+        return out
+
     def stats(self) -> dict:
         return {
             "cells": self.n,

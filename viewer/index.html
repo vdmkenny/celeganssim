@@ -16,6 +16,22 @@
   #wrap{display:flex;height:100vh;overflow:hidden}
   #stage{flex:1;position:relative;min-width:0}
   canvas#main{width:100%;height:100%;display:block;cursor:crosshair}
+  canvas#net{width:100%;height:100%;display:none;cursor:default;
+    position:absolute;inset:0}
+  body.network canvas#main,body.network #mini,body.network #hint,
+body.network #hud{display:none}
+  body.network canvas#net,body.network #netlegend,body.network #netinfo{display:block}
+  #tabs{position:absolute;left:50%;transform:translateX(-50%);top:12px;
+    display:flex;gap:4px;background:rgba(8,11,17,.86);border:1px solid var(--line);
+    border-radius:7px;padding:3px;z-index:3}
+  #tabs button{border:none;background:transparent;padding:5px 14px;border-radius:5px}
+  #tabs button.on{background:var(--accent);color:#07100f}
+  #netlegend{display:none;position:absolute;left:12px;bottom:12px;
+    background:rgba(8,11,17,.86);border:1px solid var(--line);border-radius:6px;
+    padding:8px 11px;font-size:11px;color:var(--dim);line-height:1.7}
+  #netinfo{display:none;position:absolute;right:12px;top:56px;min-width:170px;
+    background:rgba(8,11,17,.9);border:1px solid var(--line);border-radius:6px;
+    padding:8px 11px;font-size:11.5px}
   #mini{position:absolute;left:12px;bottom:12px;border:1px solid var(--line);
     background:rgba(8,11,17,.82);border-radius:6px}
   #hud{position:absolute;left:12px;top:12px;background:rgba(8,11,17,.82);
@@ -67,6 +83,19 @@
 <div id="wrap">
   <div id="stage">
     <canvas id="main"></canvas>
+    <canvas id="net"></canvas>
+    <div id="tabs">
+      <button id="tabArena" class="on" onclick="setView('arena')">arena</button>
+      <button id="tabNet" onclick="setView('network')">network</button>
+    </div>
+    <div id="netlegend">
+      <div><b>sensory</b> &rarr; <b>interneuron</b> &rarr; <b>motor</b> &rarr; <b>muscle</b></div>
+      <div>node brightness = live activation &middot; hover a node to name it</div>
+      <div><i class="sw" style="background:#5ad1c4"></i>above rest
+          <i class="sw" style="background:#e2565f;margin-left:8px"></i>below rest
+          <i class="sw" style="background:#6b7a92;margin-left:8px"></i>gap junction</div>
+    </div>
+    <div id="netinfo"></div>
     <canvas id="mini" width="220" height="160"></canvas>
     <div id="hud">
       <div class="b" id="behavior">forward</div>
@@ -83,11 +112,21 @@
     <h1>C. elegans simulator</h1>
     <div class="sub">302 neurons &middot; 95 body-wall muscles &middot; real connectome</div>
 
-    <details open><summary>Stimulate</summary><div class="body">
+    <details open><summary>Stimulate<span class="tag" id="tagTool">poke</span></summary><div class="body">
+    <div class="sub">pick a tool, then click in the arena</div>
+    <div class="row" id="tools">
+      <button data-tool="poke"       onclick="setTool('poke')">poke</button>
+      <button data-tool="harsh"      onclick="setTool('harsh')">harsh prod</button>
+      <button data-tool="attractant" onclick="setTool('attractant')">attractant</button>
+      <button data-tool="repellent"  onclick="setTool('repellent')">repellent</button>
+      <button data-tool="food"       onclick="setTool('food')">bacteria</button>
+    </div>
+    <div id="tooltip" class="sub"></div>
     <div class="row">
-      <button onclick="poke('anterior')">poke head</button>
-      <button onclick="poke('posterior')">poke tail</button>
       <button onclick="poke('nose')">nose touch</button>
+      <button onclick="poke('anterior')">head</button>
+      <button onclick="poke('midbody')">mid-body</button>
+      <button onclick="poke('posterior')">tail</button>
     </div>
     <div class="row">
       <button onclick="cmd({cmd:'clear_sources'})">clear chemicals</button>
@@ -167,11 +206,12 @@ const $ = id => document.getElementById(id);
 const main = $('main'), mctx = main.getContext('2d');
 const mini = $('mini'), nctx = mini.getContext('2d');
 const musc = $('musc'), sctx = musc.getContext('2d');
+const net = $('net'), ectx = net.getContext('2d');
 let frame = null, dpr = window.devicePixelRatio || 1;
 
 function fit(){
-  const r = main.getBoundingClientRect();
-  main.width = r.width*dpr; main.height = r.height*dpr;
+  const r = $('stage').getBoundingClientRect();
+  for (const c of [main, net]) { c.width = r.width*dpr; c.height = r.height*dpr; }
 }
 window.addEventListener('resize', fit); fit();
 
@@ -209,14 +249,58 @@ function dropFood(){
   cmd({cmd:'add_source',x:t.x,y:t.y,kind:'food',strength:1.0,sigma:6.0});
 }
 
+// --- tools: what a click in the arena does -----------------------------
+const TOOLS = {
+  poke:       {label:'poke',       hint:'click anywhere on the body. Which touch neurons hear it depends on where along the body you hit.'},
+  harsh:      {label:'harsh prod', hint:'high force. Also recruits the PVD nociceptors, so it still works in mec-4 mutants.'},
+  attractant: {label:'attractant', hint:'drops a salt gradient plus a bacterial lawn.'},
+  repellent:  {label:'repellent',  hint:'drops a noxious gradient that ASH avoids.'},
+  food:       {label:'bacteria',   hint:'drops a lawn to feed on. Grazing depletes it.'},
+};
+let tool = 'poke';
+function setTool(t){
+  tool = t;
+  document.querySelectorAll('#tools button').forEach(b =>
+    b.classList.toggle('on', b.dataset.tool === t));
+  $('tooltip').textContent = TOOLS[t].hint;
+  $('tagTool').textContent = TOOLS[t].label;
+  $('hint').textContent = 'tool: ' + TOOLS[t].label + '  ·  click in the arena';
+}
+
 main.addEventListener('click', ev => {
   if(!frame) return;
   const r = main.getBoundingClientRect();
   const p = screenToWorld(ev.clientX-r.left, ev.clientY-r.top, r);
-  const kind = ev.shiftKey ? 'repellent' : 'salt';
-  cmd({cmd:'add_source', x:p[0], y:p[1], kind:kind, strength:1.0, sigma:6.0});
-  if(!ev.shiftKey) cmd({cmd:'add_source', x:p[0], y:p[1], kind:'food', strength:1.0, sigma:3.0});
+  if(tool === 'poke' || tool === 'harsh'){
+    cmd({cmd:'poke_at', x:p[0], y:p[1],
+         strength: tool==='harsh' ? 2.2 : 1.0, harsh: tool==='harsh'})
+      .then(j => { if(j && j.hit) flash(p, j.hit.harsh); });
+    return;
+  }
+  if(tool === 'repellent'){
+    cmd({cmd:'add_source', x:p[0], y:p[1], kind:'repellent', strength:1.0, sigma:6.0});
+  } else if(tool === 'food'){
+    cmd({cmd:'add_source', x:p[0], y:p[1], kind:'food', strength:1.0, sigma:3.0});
+  } else {
+    cmd({cmd:'add_source', x:p[0], y:p[1], kind:'salt', strength:1.0, sigma:6.0});
+    cmd({cmd:'add_source', x:p[0], y:p[1], kind:'food', strength:1.0, sigma:3.0});
+  }
 });
+
+// Brief marker where a poke landed, so a hit is distinguishable from a miss.
+let flashes = [];
+function flash(p, harsh){ flashes.push({p:p, t:performance.now(), harsh:harsh}); }
+function drawFlashes(ctx, s, cx, cy){
+  const now = performance.now();
+  flashes = flashes.filter(f => now - f.t < 600);
+  for(const f of flashes){
+    const age = (now - f.t)/600;
+    const x=(f.p[0]-cam[0])*s+cx, y=(f.p[1]-cam[1])*s+cy;
+    ctx.strokeStyle = f.harsh ? `rgba(226,86,95,${1-age})` : `rgba(255,212,121,${1-age})`;
+    ctx.lineWidth = 2*dpr;
+    ctx.beginPath(); ctx.arc(x, y, (6 + 26*age)*dpr, 0, 7); ctx.stroke();
+  }
+}
 
 // ---- camera ---------------------------------------------------------
 const VIEW_MM = 3.4;            // width of the main view in mm (worm is 1 mm)
@@ -322,6 +406,7 @@ function drawGrid(ctx, w, h, s, cx, cy){
 }
 
 function render(){
+  if(view === 'network'){ drawNetwork(frame); requestAnimationFrame(render); return; }
   if(!frame){ requestAnimationFrame(render); return; }
   const f=frame, r=main.getBoundingClientRect();
   const w=main.width, h=main.height, s=scaleFor(r)*dpr;
@@ -344,6 +429,8 @@ function render(){
   mctx.beginPath(); mctx.moveTo(20*dpr,h-24*dpr); mctx.lineTo(20*dpr+s,h-24*dpr); mctx.stroke();
   mctx.fillStyle='rgba(230,237,247,.65)'; mctx.font=`${11*dpr}px ui-monospace,monospace`;
   mctx.fillText('1 mm', 20*dpr, h-30*dpr);
+
+  drawFlashes(mctx, s, cx, cy);
 
   drawMini(f);
   drawMuscles(f);
@@ -385,6 +472,215 @@ function drawMuscles(f){
   sctx.fillStyle='rgba(139,152,173,.75)'; sctx.font='9px ui-monospace,monospace';
   sctx.fillText('head',3,10); sctx.fillText('tail',W-24,10);
 }
+
+// --- network view ------------------------------------------------------
+let graph = null, view = 'arena', hover = -1, pinned = -1, netPts = null;
+
+function setView(v){
+  view = v;
+  document.body.classList.toggle('network', v === 'network');
+  $('tabArena').classList.toggle('on', v === 'arena');
+  $('tabNet').classList.toggle('on', v === 'network');
+  if (v === 'network' && !graph) loadGraph();
+  fit();
+}
+function loadGraph(){
+  fetch('/network').then(r => r.json()).then(g => {
+    graph = g;
+    // Map connectome index -> node, since the activity vector arrives in
+    // connectome order but nodes are stored in layout order.
+    graph.byIndex = new Array(g.index.length);
+    const pos = {};
+    g.nodes.forEach((n, li) => { pos[n.n] = n; n.li = li; });
+    g.index.forEach((name, i) => {
+      const n = pos[name];
+      graph.byIndex[i] = n;
+      if (n) n.ci = i;              // connectome index, cached once
+    });
+    // Adjacency in layout-index space, for hover highlighting.
+    graph.adj = g.nodes.map(() => new Set());
+    graph.links = g.nodes.map(() => []);
+    for (const [i, j, wt, gap] of g.edges) {
+      const a = graph.byIndex[i], b = graph.byIndex[j];
+      if (!a || !b) continue;
+      graph.adj[a.li].add(b.li); graph.adj[b.li].add(a.li);
+      graph.links[a.li].push({to: b, w: wt, gap: gap, out: true});
+      graph.links[b.li].push({to: a, w: wt, gap: gap, out: false});
+    }
+    netDefaultInfo();
+  }).catch(() => { $('netinfo').textContent = 'could not load network'; });
+}
+
+function netLayout(w, h){
+  const padX = 70*dpr, padY = 52*dpr;
+  return graph.nodes.map(n => [padX + n.x*(w-2*padX),
+                              padY + n.y*(h - padY - 20*dpr)]);
+}
+
+function drawNetwork(f){
+  const w = net.width, h = net.height;
+  ectx.clearRect(0,0,w,h);
+  ectx.fillStyle = '#0b0e14'; ectx.fillRect(0,0,w,h);
+  if(!graph){ return; }
+  const P = netLayout(w,h);
+  netPts = P;
+  const act = (f && f.activity) || null;
+
+  // Edges first, faint, so the nodes read on top.
+  for(const [i,j,wt,gap] of graph.edges){
+    const a = graph.byIndex[i], b = graph.byIndex[j];
+    if(!a || !b) continue;
+    const ai = a.li, bi = b.li;
+    const pa = P[ai], pb = P[bi];
+    // Presynaptic drive modulates edge brightness, so you can watch signal move.
+    let s = act ? Math.max(0, (act[i]-0.5)*2) : 0;
+    const foc = (hover >= 0) ? hover : pinned;
+    const lit = foc>=0 && (ai===foc || bi===foc);
+    if (foc>=0 && !lit) { ectx.globalAlpha = 0.12; } else { ectx.globalAlpha = 1; }
+    ectx.strokeStyle = gap
+      ? `rgba(107,122,146,${lit?0.85:0.05+0.25*s})`
+      : `rgba(90,209,196,${lit?0.9:0.035+0.4*s})`;
+    ectx.lineWidth = (lit?1.6:0.5)*dpr;
+    ectx.beginPath();
+    ectx.moveTo(pa[0],pa[1]);
+    const mx=(pa[0]+pb[0])/2;
+    ectx.bezierCurveTo(mx,pa[1],mx,pb[1],pb[0],pb[1]);
+    ectx.stroke();
+  }
+  ectx.globalAlpha = 1;
+
+  // Nodes.
+  const focus = (hover >= 0) ? hover : pinned;
+  const near = focus >= 0 ? graph.adj[focus] : null;
+  graph.nodes.forEach((n,i) => {
+    const p = P[i];
+    const related = focus < 0 || i === focus || (near && near.has(i));
+    const a = (act && n.ci !== undefined) ? act[n.ci] : 0.5;
+    const d = a - 0.5;                       // deviation from resting drive
+    // Muscle potentials swing far less than neuron drive, so they need their
+    // own gain or the whole output column reads as dead.
+    const mag = Math.min(1, Math.abs(d) * (n.kind==='muscle' ? 9 : 4));
+    const base = d >= 0 ? [90,209,196] : [226,86,95];
+    const k = 0.3 + 0.7*mag;
+    const fade = related ? 1 : 0.18;
+    ectx.globalAlpha = fade;
+    ectx.fillStyle = `rgb(${Math.round(base[0]*k)},${Math.round(base[1]*k)},${Math.round(base[2]*k)})`;
+    let r = (n.kind==='muscle' ? 2.4 + 1.6*mag : 2.6 + 2.4*mag)*dpr;
+    if (i === focus) r *= 2.0;
+    ectx.beginPath(); ectx.arc(p[0],p[1],r,0,7); ectx.fill();
+    if (focus >= 0 && related) {
+      ectx.globalAlpha = 1;
+      ectx.strokeStyle = i === focus ? '#ffd479' : 'rgba(255,212,121,.55)';
+      ectx.lineWidth = (i === focus ? 2 : 1)*dpr;
+      ectx.beginPath(); ectx.arc(p[0],p[1], r + 3*dpr, 0, 7); ectx.stroke();
+    }
+    ectx.globalAlpha = 1;
+  });
+
+  // Name the focused cell right on the canvas.
+  if (focus >= 0) {
+    const n = graph.nodes[focus], p = P[focus];
+    ectx.font = `600 ${12*dpr}px ui-monospace,monospace`;
+    const label = n.n;
+    const tw = ectx.measureText(label).width;
+    let lx = p[0] + 12*dpr, ly = p[1] - 10*dpr;
+    if (lx + tw > w - 8*dpr) lx = p[0] - tw - 12*dpr;
+    ectx.fillStyle = 'rgba(8,11,17,.9)';
+    ectx.fillRect(lx - 4*dpr, ly - 12*dpr, tw + 8*dpr, 17*dpr);
+    ectx.fillStyle = '#ffd479';
+    ectx.fillText(label, lx, ly);
+  }
+
+  // Column headings on a band, so they stay readable over the edge tangle.
+  ectx.fillStyle='rgba(11,14,20,.95)';
+  ectx.fillRect(0,0,w,38*dpr);
+  ectx.strokeStyle='rgba(30,38,53,1)'; ectx.lineWidth=1*dpr;
+  ectx.beginPath(); ectx.moveTo(0,38*dpr); ectx.lineTo(w,38*dpr); ectx.stroke();
+  const xs=[0.06,0.34,0.63,0.92], padX=70*dpr;
+  const counts={};
+  graph.nodes.forEach(n=>{counts[n.layer]=(counts[n.layer]||0)+1;});
+  ectx.textAlign='center';
+  graph.layers.forEach((L,i)=>{
+    const cx2 = padX + xs[i]*(w-2*padX);
+    ectx.fillStyle='#e6edf7';
+    ectx.font=`600 ${13*dpr}px ui-monospace,monospace`;
+    ectx.fillText(L.toUpperCase(), cx2, 17*dpr);
+    ectx.fillStyle='rgba(139,152,173,.85)';
+    ectx.font=`${11*dpr}px ui-monospace,monospace`;
+    ectx.fillText(`${counts[i]||0} cells`, cx2, 31*dpr);
+    // Tick marking the column axis.
+    ectx.strokeStyle='rgba(90,209,196,.25)';
+    ectx.beginPath(); ectx.moveTo(cx2,40*dpr); ectx.lineTo(cx2,h); ectx.stroke();
+  });
+  ectx.textAlign='left';
+}
+
+function netHitTest(ev){
+  if(!graph || !netPts) return -1;
+  const r = net.getBoundingClientRect();
+  const mx=(ev.clientX-r.left)*dpr, my=(ev.clientY-r.top)*dpr;
+  let best=-1, bd=14*dpr;
+  for(let i=0;i<netPts.length;i++){
+    const d=Math.hypot(netPts[i][0]-mx, netPts[i][1]-my);
+    if(d<bd){ bd=d; best=i; }
+  }
+  return best;
+}
+
+function describeNode(li){
+  const n = graph.nodes[li];
+  const a = (frame && frame.activity && n.ci !== undefined) ? frame.activity[n.ci] : 0.5;
+  const dev = a - 0.5;
+  const sign = dev >= 0 ? '+' : '';
+  const col = dev >= 0 ? 'var(--accent)' : 'var(--bad)';
+  // Strongest partners, chemical and electrical, as the connectome has them.
+  const links = (graph.links[li] || []).slice().sort((p,q) => q.w - p.w).slice(0, 6);
+  const rows = links.map(l => {
+    const arrow = l.gap ? '&harr;' : (l.out ? '&rarr;' : '&larr;');
+    const kind = l.gap ? 'gap' : 'chem';
+    return `<div class="kv"><span>${arrow} ${l.to.n}</span><span>${l.w} ${kind}</span></div>`;
+  }).join('');
+  const deg = (graph.links[li] || []).length;
+  return `<div style="font-size:13px;font-weight:600">${n.n}</div>`
+    + `<div style="color:var(--dim)">${graph.layers[n.layer]}`
+    + (n.nt ? ` &middot; ${n.nt}` : '') + `</div>`
+    + `<div style="margin:5px 0"><span style="color:${col}">drive ${a.toFixed(2)} `
+    + `(${sign}${dev.toFixed(2)})</span></div>`
+    + `<div style="color:var(--dim);margin-bottom:3px">${deg} strong connections</div>`
+    + rows
+    + (pinned === li ? '<div style="color:var(--warn);margin-top:5px">pinned - click again to release</div>'
+                     : '<div style="color:var(--dim);margin-top:5px">click to pin</div>');
+}
+
+function netDefaultInfo(){
+  if(!graph) return;
+  $('netinfo').innerHTML =
+    `<b>${graph.nodes.length}</b> cells<br><b>${graph.edges.length}</b> strongest links`
+    + `<br><span style="color:var(--dim)">hover a node to inspect</span>`;
+}
+
+net.addEventListener('mousemove', ev => {
+  const best = netHitTest(ev);
+  if(best === hover) return;
+  hover = best;
+  net.style.cursor = best >= 0 ? 'pointer' : 'default';
+  if(best >= 0) $('netinfo').innerHTML = describeNode(best);
+  else if(pinned >= 0) $('netinfo').innerHTML = describeNode(pinned);
+  else netDefaultInfo();
+});
+
+net.addEventListener('click', ev => {
+  const hit = netHitTest(ev);
+  if(hit < 0){ pinned = -1; netDefaultInfo(); return; }
+  pinned = (pinned === hit) ? -1 : hit;
+  $('netinfo').innerHTML = pinned >= 0 ? describeNode(pinned) : describeNode(hit);
+});
+
+net.addEventListener('mouseleave', () => {
+  hover = -1;
+  if(pinned >= 0) $('netinfo').innerHTML = describeNode(pinned);
+  else netDefaultInfo();
+});
 
 const BCOL = {forward:'#5ad1c4',reversal:'#e2565f',omega:'#e8a33d',refractory:'#8b98ad'};
 function updatePanel(f){
@@ -431,6 +727,7 @@ function updatePanel(f){
 const es=new EventSource('/stream');
 es.onmessage = ev => { frame=JSON.parse(ev.data); updatePanel(frame); };
 es.onerror = () => { $('msg').textContent='stream disconnected. Is the server running?'; };
+setTool('poke');
 requestAnimationFrame(render);
 </script>
 </body>

@@ -152,7 +152,8 @@ GENE_EFFECTS: dict[str, GeneEffect] = {
         "mec-4",
         "DEG/ENaC channel subunit of the gentle-touch mechanotransducer",
         "Mec: touch-insensitive. The animal ignores a gentle eyelash stroke to "
-        "the body but still responds to harsh prodding.",
+        "the body but still responds normally to harsh prodding, because that "
+        "runs through PVD rather than the MEC-4 channel.",
         sensory_scale={"touch": 0.0},
     ),
     "mec-10": GeneEffect(
@@ -160,8 +161,10 @@ GENE_EFFECTS: dict[str, GeneEffect] = {
         "DEG/ENaC subunit partnering MEC-4",
         "Only PARTIAL touch loss for a true deletion null. The classic alleles "
         "that look fully touch-insensitive are recessive gain-of-function, not "
-        "nulls - the null is modelled here.",
-        sensory_scale={"touch": 0.35},
+        "nulls - the null is modelled here. Unlike mec-4, MEC-10 is also "
+        "required (with DEGT-1) for PVD harsh touch, so hard prodding is "
+        "degraded too.",
+        sensory_scale={"touch": 0.35, "harsh_touch": 0.3},
     ),
     "mec-2": GeneEffect(
         "mec-2",

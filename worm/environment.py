@@ -31,11 +31,30 @@ class Source:
 
 @dataclass
 class Poke:
-    """A transient mechanical stimulus applied to part of the body."""
+    """A transient mechanical stimulus at a point along the body.
 
-    region: str          # "anterior" | "posterior" | "nose"
+    `u` is the position as a fraction of body length, 0 at the nose and 1 at
+    the tail tip. Touch is positional rather than bucketed into named regions
+    because the six touch receptor neurons tile the body with overlapping,
+    graded receptive fields (see TOUCH_FIELDS in sensory.py), so where you
+    prod the animal genuinely changes which cells hear it.
+    """
+
+    u: float
     strength: float = 1.0
     remaining: float = 0.25   # seconds
+    harsh: bool = False       # high force also recruits the PVD nociceptors
+
+
+# Named presets, kept so the existing buttons and the validation suite can
+# still say "anterior" without caring about coordinates.
+REGION_U: dict[str, float] = {
+    "nose": 0.0,
+    "anterior": 0.20,
+    "midbody": 0.50,
+    "posterior": 0.85,
+    "tail": 0.97,
+}
 
 
 @dataclass
@@ -77,8 +96,21 @@ class Environment:
         else:
             self.sources = [s for s in self.sources if s.kind != kind]
 
-    def poke(self, region: str, strength: float = 1.0, duration: float = 0.25) -> None:
-        self.pokes.append(Poke(region=region, strength=strength, remaining=duration))
+    def poke(self, where: str | float, strength: float = 1.0,
+             duration: float = 0.25, harsh: bool | None = None) -> Poke:
+        """Prod the animal at a named region or at an arbitrary body position.
+
+        `where` is either a key of REGION_U or a float in 0..1 along the body.
+        Harsh touch is inferred from force unless stated: gentle stroking is
+        what the MEC-4 touch neurons transduce, while harder prodding also
+        recruits the high-threshold PVD nociceptors.
+        """
+        u = REGION_U[where] if isinstance(where, str) else float(np.clip(where, 0.0, 1.0))
+        if harsh is None:
+            harsh = strength > 1.5
+        p = Poke(u=u, strength=strength, remaining=duration, harsh=harsh)
+        self.pokes.append(p)
+        return p
 
     def concentration(self, p: np.ndarray, kind: str) -> float:
         return sum(s.at(p) for s in self.sources if s.kind == kind)
@@ -125,8 +157,19 @@ class Environment:
             pk.remaining -= dt
         self.pokes = [p for p in self.pokes if p.remaining > 0]
 
+    def active_pokes(self) -> list[Poke]:
+        return list(self.pokes)
+
     def active_poke(self, region: str) -> float:
-        return sum(p.strength for p in self.pokes if p.region == region)
+        """Total force currently landing near a named region.
+
+        Retained for convenience and telemetry; the sensory layer does not use
+        this, because it needs the position rather than a bucket.
+        """
+        if region not in REGION_U:
+            return 0.0
+        target = REGION_U[region]
+        return sum(p.strength for p in self.pokes if abs(p.u - target) < 0.12)
 
     def wrap(self, p: np.ndarray) -> np.ndarray:
         """Toroidal arena, so the worm never gets stuck at a wall."""

@@ -127,6 +127,34 @@ class WormSimulation:
         self._rest_bwd = float(np.mean(self.ns.activation(self.i_bwd)))
         self._bwd_baseline: float | None = None
 
+    # -- stimulation ----------------------------------------------------
+    def poke_at(self, x: float, y: float, strength: float = 1.0,
+                radius: float = 0.22, duration: float = 0.3,
+                harsh: bool | None = None) -> dict | None:
+        """Poke wherever the user clicked, if that lands on the animal.
+
+        Finds the nearest point on the body centreline and converts it to a
+        position along the body, which is what the mechanosensory receptive
+        fields are defined over. Returns None if the click missed, so the UI
+        can say so instead of silently doing nothing.
+        """
+        nodes = self.body.world_nodes()
+        target = np.array([float(x), float(y)])
+        # The arena wraps, so measure to the nearest periodic image.
+        d = nodes - target
+        d[:, 0] -= np.round(d[:, 0] / self.env.width) * self.env.width
+        d[:, 1] -= np.round(d[:, 1] / self.env.height) * self.env.height
+        dist = np.linalg.norm(d, axis=1)
+        i = int(np.argmin(dist))
+        hit_radius = radius * max(self.body.body_length, 0.05)
+        if dist[i] > max(hit_radius, float(self.body.radius[i]) * 3.0):
+            return None
+        u = i / (len(nodes) - 1)
+        self.env.poke(u, strength=strength, duration=duration, harsh=harsh)
+        return {"u": round(u, 3), "segment": i,
+                "distance_mm": round(float(dist[i]), 3),
+                "harsh": bool(strength > 1.5 if harsh is None else harsh)}
+
     # -- genetics -------------------------------------------------------
     def knock_out(self, gene: str) -> dict:
         rec = self.genome.knock_out(gene)
@@ -378,6 +406,9 @@ class WormSimulation:
             "curvature": [round(float(v), 3) for v in self.body.curvature],
             "trail": [[round(float(p[0]), 2), round(float(p[1]), 2)]
                       for p in self.state.trail[-400:]],
+            # Per-cell drive for the network view, in connectome index order.
+            # Two decimals keeps 448 values under ~2 kB a frame.
+            "activity": [round(float(v), 2) for v in act],
             "neuron_activity": {
                 "forward_cmd": round(float(np.mean(act[self.i_fwd])), 4),
                 "backward_cmd": round(float(np.mean(act[self.i_bwd])), 4),

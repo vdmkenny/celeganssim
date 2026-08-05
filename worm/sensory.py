@@ -31,10 +31,14 @@ SENSORS = {
     "odor_avoid": ["AWBL", "AWBR"],
     "nociception": ["ASHL", "ASHR"],
     "thermo": ["AFDL", "AFDR"],
+    # Touch is handled positionally through TOUCH_FIELDS below rather than as
+    # flat modality buckets. These entries exist so the gene gating and the
+    # telemetry readout still have named handles.
     "touch_anterior": ["ALML", "ALMR", "AVM"],
     "touch_posterior": ["PLML", "PLMR"],
     "nose_touch": ["ASHL", "ASHR", "FLPL", "FLPR", "OLQDL", "OLQDR",
                    "OLQVL", "OLQVR"],
+    "harsh_touch": ["PVDL", "PVDR"],
     "oxygen_high": ["URXL", "URXR", "AQR", "PQR"],
     "oxygen_low": ["BAGL", "BAGR"],
     "food_mech": ["CEPDL", "CEPDR", "CEPVL", "CEPVR", "ADEL", "ADER"],
@@ -51,10 +55,65 @@ GATE = {
     "touch_anterior": ("touch",),
     "touch_posterior": ("touch",),
     "nose_touch": ("nociception",),
+    # Harsh touch runs through MEC-10/DEGT-1 in PVD, not the MEC-4 channel, so
+    # it survives mec-4 loss. That dissociation is a real diagnostic: mec-4
+    # nulls ignore a gentle stroke but still respond to hard prodding.
+    "harsh_touch": ("harsh_touch",),
     "oxygen_high": (),
     "oxygen_low": (),
     "food_mech": (),
 }
+
+
+# Receptive fields of the mechanosensory neurons along the body, expressed as
+# the stretch of body each one's sensory process actually runs along. Position
+# u is 0 at the nose and 1 at the tail tip.
+#
+# The touch receptor neurons are not point sensors: each extends a long
+# undifferentiated process embedded in the cuticle, and it is that process
+# which transduces. ALM cell bodies sit near the middle and project ANTERIORLY
+# to the head; PLM cell bodies sit in the tail and project anteriorly to about
+# the vulva. The two therefore overlap around mid-body, which is why a
+# mid-body stroke drives both weakly and gives the least reliable response,
+# while head and tail strokes drive opposing circuits cleanly.
+#
+# Refs: Chalfie & Sulston 1981 Dev Biol 82:358; Chalfie et al. 1985 J Neurosci
+# 5:956; WormAtlas Touch Receptor Neurons; Goodman 2006 WormBook
+# Mechanosensation. PVD tiles almost the whole body with a menorah-like arbor
+# and is high-threshold (Albeg et al. 2011; Chatzigeorgiou et al. 2010).
+TOUCH_FIELDS: list[dict] = [
+    # (cells, start, end, edge softness, modality this counts toward)
+    {"cells": ["ASHL", "ASHR", "FLPL", "FLPR", "OLQDL", "OLQDR", "OLQVL", "OLQVR"],
+     "start": -0.02, "end": 0.06, "soft": 0.035, "modality": "nose_touch"},
+    {"cells": ["ALML", "ALMR"],
+     "start": 0.02, "end": 0.48, "soft": 0.075, "modality": "touch_anterior"},
+    # AVM is born post-embryonically, sits ventrally and slightly posterior to
+    # ALM, and projects anteriorly. Functionally an anterior touch cell.
+    {"cells": ["AVM"],
+     "start": 0.12, "end": 0.55, "soft": 0.075, "modality": "touch_anterior"},
+    {"cells": ["PLML", "PLMR"],
+     "start": 0.55, "end": 1.02, "soft": 0.075, "modality": "touch_posterior"},
+    # PVM is a touch receptor neuron anatomically but has no demonstrated
+    # touch-withdrawal role, so it is given a field and left behaviourally
+    # weak rather than wired as a driver.
+    {"cells": ["PVM"],
+     "start": 0.60, "end": 0.95, "soft": 0.08, "modality": "touch_posterior",
+     "weight": 0.15},
+    # PVD: high-threshold harsh touch, tiling nearly the whole body.
+    {"cells": ["PVDL", "PVDR"],
+     "start": 0.15, "end": 0.95, "soft": 0.09, "modality": "harsh_touch",
+     "harsh_only": True},
+]
+
+
+def _field_coverage(u: float, start: float, end: float, soft: float) -> float:
+    """Smooth window over the body: full inside [start, end], tapering at the
+    edges rather than switching on and off, because a sensory process fades
+    out over a distance rather than stopping at a line."""
+    s = max(soft, 1e-4)
+    a = 1.0 / (1.0 + np.exp(-(u - start) / s))
+    b = 1.0 / (1.0 + np.exp(-(end - u) / s))
+    return float(a * b)
 
 
 class SensorySystem:
@@ -69,6 +128,13 @@ class SensorySystem:
             k: [n for n in names if n not in conn.index]
             for k, names in SENSORS.items()
         }
+        # Resolve each mechanosensory receptive field to cell indices once.
+        self.fields = []
+        for f in TOUCH_FIELDS:
+            present = [c for c in f["cells"] if c in conn.index]
+            self.fields.append({**f, "idx": conn.indices(present),
+                                "missing": [c for c in f["cells"]
+                                            if c not in conn.index]})
         # Adaptive state for the derivative-taking sensors.
         self._salt_prev: float | None = None
         self._odor_prev: float | None = None
@@ -103,11 +169,10 @@ class SensorySystem:
         drive["odor_avoid"] = float(np.clip(env.concentration(head, "repellent") * 1.2,
                                             0.0, 1.5))
 
-        # --- nociception ---
+        # --- nociception: chemical only here, the mechanical part of ASH is
+        # driven by its nose receptive field below ---
         repel = env.concentration(head, "repellent")
-        drive["nociception"] = float(np.clip(repel * 1.6 + env.active_poke("nose"),
-                                             0.0, 2.0))
-        drive["nose_touch"] = float(np.clip(env.active_poke("nose"), 0.0, 2.0))
+        drive["nociception"] = float(np.clip(repel * 1.6, 0.0, 2.0))
 
         # --- thermosensation: AFD is warming-activated above the remembered
         # cultivation temperature, and silent below it ---
@@ -118,9 +183,9 @@ class SensorySystem:
         drive["thermo"] = float(np.clip((0.4 + d_temp * 3.0) * (1.0 if above > -0.5 else 0.1),
                                         0.0, 1.5))
 
-        # --- mechanosensation ---
-        drive["touch_anterior"] = float(np.clip(env.active_poke("anterior"), 0.0, 2.0))
-        drive["touch_posterior"] = float(np.clip(env.active_poke("posterior"), 0.0, 2.0))
+        # Mechanosensation is positional and handled after this loop, since
+        # cells within one modality get different weights depending on where
+        # along the body the animal was touched.
 
         # --- gas sensing ---
         o2 = env.oxygen
@@ -137,5 +202,41 @@ class SensorySystem:
             if v != 0.0 and len(self.idx[modality]):
                 I[self.idx[modality]] += v * amplitude
 
-        self.last = drive
+        drive.update(self._apply_touch(env, I, amplitude))
+        self.last = {k: v for k, v in drive.items() if v}
         return I
+
+    def _apply_touch(self, env: Environment, I: np.ndarray,
+                     amplitude: float) -> dict[str, float]:
+        """Inject mechanosensory current according to where the animal was touched.
+
+        Each receptive field contributes in proportion to how much of it the
+        poke lands inside. Nothing here decides what the animal does about it:
+        the current goes into the real touch neurons and the consequence comes
+        out of the connectome, which is why a head poke reverses and a tail
+        poke accelerates without either being written down anywhere.
+        """
+        per_modality: dict[str, float] = {}
+        pokes = env.active_pokes()
+        if not pokes:
+            return per_modality
+
+        for f in self.fields:
+            if len(f["idx"]) == 0:
+                continue
+            gain = self._gain(f["modality"])
+            if gain <= 0.0:
+                continue
+            total = 0.0
+            for p in pokes:
+                # PVD is high-threshold: gentle stroking never reaches it.
+                if f.get("harsh_only") and not p.harsh:
+                    continue
+                cov = _field_coverage(p.u, f["start"], f["end"], f["soft"])
+                total += p.strength * cov * f.get("weight", 1.0)
+            if total <= 0.0:
+                continue
+            v = float(np.clip(total * gain, 0.0, 2.5))
+            I[f["idx"]] += v * amplitude
+            per_modality[f["modality"]] = per_modality.get(f["modality"], 0.0) + v
+        return per_modality
