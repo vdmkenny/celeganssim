@@ -54,6 +54,33 @@ class NeuralParams:
     a_r = (1.0 / 1.5) / 1000.0   # synaptic rise rate, 1/ms  (0.667 s^-1)
     a_d = (5.0 / 1.5) / 1000.0   # synaptic decay rate, 1/ms (3.33 s^-1)
 
+    # --- intrinsic oscillator currents (motor neurons only) ---
+    #
+    # The leak-plus-synapse model above is a pure relaxation system: it can only
+    # settle to fixed points, never oscillate. But A-class motor neurons ARE
+    # intrinsic oscillators, and are sufficient to drive backward locomotion
+    # with the premotor interneurons removed entirely (Gao et al. 2018 eLife
+    # 7:e29915). That oscillation needs the P/Q/N-type calcium channel UNC-2.
+    #
+    # So motor neurons get a Morris-Lecar style pair: a fast regenerative
+    # calcium conductance for the upstroke and a slow potassium conductance for
+    # the downstroke. Below threshold the cell is quiescent; depolarise it (as
+    # AVB does through its gap junctions) and it oscillates. That gating is the
+    # point -- the premotor interneurons set state, they do not generate rhythm.
+    #
+    # Refs: Gao et al. 2018 (A-class oscillators, UNC-2 dependent); Liu et al.
+    # 2018 Cell 175:57 and Jiang et al. 2022 (regenerative calcium currents and
+    # action-potential-like events in C. elegans neurons); Morris & Lecar 1981.
+    g_Ca = 0.28       # regenerative calcium conductance, nS
+    E_Ca = 120.0      # calcium reversal potential, mV
+    V_Ca = -25.0      # half-activation of the calcium conductance, mV
+    k_Ca = 7.0        # its steepness, mV
+    g_K = 0.55        # slow potassium conductance, nS
+    E_K = -80.0       # potassium reversal potential, mV
+    V_K = -18.0       # half-activation of the slow current, mV
+    k_K = 9.0         # its steepness, mV
+    tau_w = 850.0     # slow-current time constant, ms -> ~0.5 Hz rhythm
+
 
 class NervousSystem:
     def __init__(self, conn: Connectome, genome: Genome,
@@ -73,6 +100,21 @@ class NervousSystem:
         self.s_eq = half / (half + self.p.a_d)
         self.ablated: set[str] = set()
         self._ablated_idx = np.array([], dtype=int)
+
+        # Which cells carry the intrinsic oscillator currents. Only the ventral
+        # cord motor neurons: they are the cells shown to oscillate, and giving
+        # the whole network regenerative calcium would be inventing physiology
+        # nobody has measured.
+        self.osc_mask = np.zeros(self.n, dtype=bool)
+        for name in conn.names:
+            if conn.cell_info[name].get("vnc_class") in ("DA", "DB", "VA", "VB", "AS"):
+                self.osc_mask[conn.index[name]] = True
+        # OFF by default: the parameters above do not yet produce a
+        # physiological oscillation (a parameter search over g_Ca, g_K, their
+        # half-activations and tau_w found no regime with a realistic voltage
+        # swing), so this stays disabled until the biophysics is pinned down
+        # against measured values. See docs/emergent-cpg.md.
+        self.intrinsic = False
 
         self._apply_genetics()
         self.reset()
@@ -166,6 +208,17 @@ class NervousSystem:
         self.V_th = self._solve_thresholds()
         self.V = self.V_th.copy()
         self.s = np.full(self.n, self.s_eq)
+        # Slow recovery variable of the intrinsic oscillator, at its steady
+        # state for the resting potential.
+        self.w = self._w_inf(self.V)
+
+    def _w_inf(self, V):
+        p = self.p
+        return self._sigmoid((V - p.V_K) / p.k_K)
+
+    def _m_inf(self, V):
+        p = self.p
+        return self._sigmoid((V - p.V_Ca) / p.k_Ca)
 
     # -- dynamics -------------------------------------------------------
     @staticmethod
@@ -208,10 +261,25 @@ class NervousSystem:
         drive = (p.G_leak * p.E_cell + Gg @ V
                  + (gs_active * self.E_syn).sum(axis=1) + I_ext)
 
+        if self.intrinsic:
+            # Fast regenerative calcium (instantaneous gate) plus slow
+            # potassium. Together these turn a motor neuron from a relaxation
+            # element into a relaxation OSCILLATOR, but only once it is
+            # depolarised past threshold -- which is what premotor drive does.
+            m = self._m_inf(V) * self.osc_mask
+            gK = p.g_K * self.w * self.osc_mask
+            gCa = p.g_Ca * m
+            G_tot = G_tot + gCa + gK
+            drive = drive + gCa * p.E_Ca + gK * p.E_K
+
         G_tot = np.maximum(G_tot, 1e-12)
         V_inf = drive / G_tot
         tau_V = p.C / G_tot
         self.V = V_inf + (V - V_inf) * np.exp(-dt / tau_V)
+
+        if self.intrinsic:
+            w_inf = self._w_inf(self.V)
+            self.w = w_inf + (self.w - w_inf) * np.exp(-dt / p.tau_w)
 
         phi = self._sigmoid(p.beta * (self.V - self.V_th))
         rate = p.a_r * phi + p.a_d

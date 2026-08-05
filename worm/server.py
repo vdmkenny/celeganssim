@@ -22,7 +22,15 @@ from .environment import Environment
 from .genome import GENE_EFFECTS
 from .simulation import SimConfig, WormSimulation
 
-VIEWER = Path(__file__).resolve().parent.parent / "viewer" / "index.html"
+from .paths import viewer_html
+
+
+def _viewer_ok() -> bool:
+    try:
+        viewer_html()
+        return True
+    except FileNotFoundError:
+        return False
 
 
 class SimRunner:
@@ -203,10 +211,11 @@ def make_handler(runner: SimRunner):
 
         def do_GET(self):
             if self.path in ("/", "/index.html"):
-                if not VIEWER.exists():
+                vp = viewer_html() if _viewer_ok() else None
+                if vp is None:
                     self._send(500, b"viewer/index.html missing", "text/plain")
                     return
-                self._send(200, VIEWER.read_bytes(), "text/html; charset=utf-8")
+                self._send(200, vp.read_bytes(), "text/html; charset=utf-8")
             elif self.path == "/network":
                 # Static graph, fetched once. Only the activity vector is
                 # streamed per frame.

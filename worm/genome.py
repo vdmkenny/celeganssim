@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
-DATA = Path(__file__).resolve().parent.parent / "data" / "processed"
+from .paths import data_dir as _data_dir
 
 
 @dataclass(frozen=True)
@@ -311,7 +311,7 @@ class Genome:
 
     @classmethod
     def load(cls, data_dir: Path | None = None) -> "Genome":
-        d = Path(data_dir) if data_dir else DATA
+        d = Path(data_dir) if data_dir is not None else _data_dir()
         genes = json.loads((d / "genes.json").read_text())
         stats = json.loads((d / "genome_stats.json").read_text())
         return cls(genes, stats)

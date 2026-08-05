@@ -9,12 +9,19 @@ and the real wiring diagram.
 the body is the undulatory wave that moves the animal. Pick a tool, then click
 anywhere on the worm to poke it.*
 
-The animal's 100,286,401 bp genome is loaded from the actual reference assembly.
 Its nervous system is the actual electron-microscopy connectome: 300 neurons and
 95 body-wall muscles, 4,681 chemical synapse pairs and 1,342 gap junctions. Those
 cells are integrated as coupled differential equations, their output drives
 muscle, muscle drives a body, and the body moves through a fluid. It develops from
 a fertilised egg, feeds, ages and dies.
+
+**On the genome, precisely.** The WBcel235 *annotation* is load-bearing: gene
+lookup, real WormBase IDs and coordinates, and the knockout system are all driven
+by it. The 100 Mb of *sequence* is not. It yields chromosome lengths and GC
+content and nothing else. Gene effects are a curated table of 31 loci mapped onto
+subsystems, not molecular simulation, so "knock out `unc-25` and GABA synthesis
+stops" is a modelled consequence rather than a derived one. This is a behavioural
+model with a genuine annotation layer, not a genome-to-phenotype engine.
 
 ```bash
 python -m worm serve                    # live viewer at http://127.0.0.1:8080

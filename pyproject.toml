@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "celeganssim"
+version = "0.2.0"
+description = "A whole-organism C. elegans simulator built on the real connectome and genome annotation"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Kenny Van de Maele" }]
+keywords = ["c-elegans", "connectome", "neuroscience", "simulation", "teaching"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Education",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+# Only needed if you want to cross-check the integrator against an established
+# simulator; the core does not use it.
+compare = ["brian2>=2.5"]
+
+[project.urls]
+Homepage = "https://github.com/vdmkenny/celeganssim"
+Source = "https://github.com/vdmkenny/celeganssim"
+
+[project.scripts]
+worm = "worm.__main__:main"
+
+[tool.setuptools]
+packages = ["worm"]
+
+[tool.setuptools.package-data]
+# The viewer and the processed datasets ship with the package so that
+# `worm serve` works from any directory, not just a git checkout.
+worm = ["../viewer/*.html", "../data/processed/*.json"]

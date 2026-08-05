@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-DATA = Path(__file__).resolve().parent.parent / "data" / "processed"
+from .paths import data_dir as _data_dir
 
 # Reversal potential assigned to a synapse based on the presynaptic transmitter.
 # In C. elegans acetylcholine is generally excitatory and GABA generally
@@ -75,7 +75,7 @@ class Connectome:
 
     @classmethod
     def load(cls, data_dir: Path | None = None) -> "Connectome":
-        d = Path(data_dir) if data_dir else DATA
+        d = Path(data_dir) if data_dir is not None else _data_dir()
         cells = json.loads((d / "cells.json").read_text())["cells"]
         conn = json.loads((d / "connectome.json").read_text())
         return cls(cells, conn["edges"])
