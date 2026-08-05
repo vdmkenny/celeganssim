@@ -99,9 +99,26 @@ TOUCH_FIELDS: list[dict] = [
     {"cells": ["PVM"],
      "start": 0.60, "end": 0.95, "soft": 0.08, "modality": "touch_posterior",
      "weight": 0.15},
-    # PVD: high-threshold harsh touch, tiling nearly the whole body.
+    # High-threshold harsh touch (~100-200 uN, versus 1-10 uN for a gentle
+    # eyelash stroke) is carried by a separate pair of nociceptors, and they
+    # split the body between them with OPPOSITE behavioural signs:
+    #
+    #   FLP covers the head and drives REVERSAL. Its wiring is reversal-biased
+    #   (FLP->AVA/AVD/AVE greatly outweighs FLP->AVB/PVC).
+    #   PVD tiles the rest of the body and drives FORWARD escape. Its synapse
+    #   counts onto PVC and AVA are nearly equal, yet PVC wins functionally:
+    #   removing PVC flips PVD photoactivation from forward into reverse.
+    #
+    # This is why harsh touch keeps the same anterior-reverses /
+    # posterior-advances logic as gentle touch while being MEC-4 independent,
+    # so it survives intact in mec-4 nulls.
+    # Refs: Li, Kang, Piggott, Feng & Xu 2011 Nat Commun 2:315; Husson, Steuer
+    # Costa et al. 2012 Curr Biol 22:743; Chatzigeorgiou et al. 2010.
+    {"cells": ["FLPL", "FLPR"],
+     "start": -0.02, "end": 0.22, "soft": 0.06, "modality": "harsh_touch",
+     "harsh_only": True},
     {"cells": ["PVDL", "PVDR"],
-     "start": 0.15, "end": 0.95, "soft": 0.09, "modality": "harsh_touch",
+     "start": 0.18, "end": 0.95, "soft": 0.09, "modality": "harsh_touch",
      "harsh_only": True},
 ]
 

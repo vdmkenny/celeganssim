@@ -150,9 +150,17 @@ class SimRunner:
                             setattr(env, k, float(msg[k]))
                     if "life_speedup" in msg:
                         sim.cfg.life_speedup = max(0.0, float(msg["life_speedup"]))
+                    if "restart_as_egg" in msg:
+                        from .lifecycle import Lifecycle
+                        sim.life = Lifecycle()          # a fertilised egg
+                        sim.body.set_length(sim.life.body_length_mm)
+                        sim.events.clear()
+                        return {"ok": True,
+                                "msg": "restarted as a fertilised egg"}
                     if "restart_as_L1" in msg:
                         from .lifecycle import Lifecycle
                         sim.life = Lifecycle()
+                        sim.life.stage = "L1"
                         sim.body.set_length(sim.life.body_length_mm)
                         sim.events.clear()
                         return {"ok": True, "msg": "restarted as a freshly hatched L1"}

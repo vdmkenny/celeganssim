@@ -229,6 +229,56 @@ GENE_EFFECTS: dict[str, GeneEffect] = {
         global_scale={"chemical_synapse": 0.25, "arousal": 0.4,
                       "bend_amplitude": 0.55},
     ),
+    # --- Ageing and lifespan ---
+    # Loss of function in these extends life. The insulin/IGF-1 arm is
+    # strictly DAF-16 dependent: removing daf-16 abolishes it entirely, which
+    # is handled as explicit epistasis in Genome.longevity_scale rather than
+    # by multiplying scalars.
+    "daf-2": GeneEffect(
+        "daf-2",
+        "insulin/IGF-1 receptor; its loss activates DAF-16/FOXO",
+        "Lives more than twice as long (mean ~29.5 d against ~14.5 d) and is "
+        "dauer-constitutive at high temperature. The single most famous "
+        "longevity mutant in any animal. Entirely dependent on daf-16.",
+        global_scale={"lifespan": 2.0, "lifespan_needs_daf16": 1.0},
+    ),
+    "age-1": GeneEffect(
+        "age-1",
+        "PI3 kinase catalytic subunit, downstream of DAF-2",
+        "Mean lifespan up by roughly 40-65%. Like daf-2, fully suppressed by "
+        "loss of daf-16.",
+        global_scale={"lifespan": 1.5, "lifespan_needs_daf16": 1.0},
+    ),
+    "daf-16": GeneEffect(
+        "daf-16",
+        "FOXO transcription factor, the output of insulin/IGF-1 signalling",
+        "Slightly short-lived on its own (~13.5 d against ~14.5 d), and it "
+        "completely suppresses the longevity of daf-2 and age-1.",
+        global_scale={"lifespan": 0.93},
+    ),
+    "eat-2": GeneEffect(
+        "eat-2",
+        "nicotinic acetylcholine receptor subunit in the pharynx",
+        "Pumps slowly, so it eats less and is effectively diet restricted; "
+        "lifespan up 20-50%. Does NOT require daf-16, which is what separates "
+        "dietary restriction from insulin signalling.",
+        global_scale={"lifespan": 1.35},
+        sensory_scale={},
+    ),
+    "clk-1": GeneEffect(
+        "clk-1",
+        "demethoxyubiquinone hydroxylase, needed for ubiquinone synthesis",
+        "Everything slows down - defecation, pumping, development - and "
+        "lifespan rises 20-40%. daf-16 independent.",
+        global_scale={"lifespan": 1.3, "arousal": 0.75},
+    ),
+    "isp-1": GeneEffect(
+        "isp-1",
+        "Rieske iron-sulfur protein of mitochondrial complex III",
+        "Low oxygen consumption, slow behaviour, lifespan up 24-43%. "
+        "daf-16 independent, like the other mitochondrial Mit mutants.",
+        global_scale={"lifespan": 1.3, "arousal": 0.7},
+    ),
     "npr-1": GeneEffect(
         "npr-1",
         "neuropeptide receptor (FMRFamide-like), NPY-receptor family",
@@ -341,6 +391,28 @@ class Genome:
 
     def global_scale(self, key: str) -> float:
         return self._effects()[2].get(key, 1.0)
+
+    def longevity_scale(self) -> float:
+        """Lifespan multiplier, honouring the daf-16 epistasis.
+
+        daf-2 and age-1 extend life only through DAF-16. Knock out daf-16 as
+        well and the extension vanishes completely, rather than the two
+        multipliers simply combining. eat-2, clk-1 and isp-1 act through other
+        routes and survive loss of daf-16.
+        """
+        glob = self._effects()[2]
+        scale = glob.get("lifespan", 1.0)
+        if "daf-16" in self.knockouts and glob.get("lifespan_needs_daf16"):
+            # Recompute without the DAF-16-dependent contributions.
+            scale = 1.0
+            for g in sorted(self.knockouts):
+                eff = GENE_EFFECTS.get(g)
+                if not eff:
+                    continue
+                if eff.global_scale.get("lifespan_needs_daf16"):
+                    continue
+                scale *= eff.global_scale.get("lifespan", 1.0)
+        return float(scale)
 
     # -- reporting ------------------------------------------------------
     def summary(self) -> dict:

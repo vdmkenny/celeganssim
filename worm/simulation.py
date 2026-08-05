@@ -242,6 +242,9 @@ class WormSimulation:
         slow = self.food_slowing(self.env.on_food(head))
         if self.life.dauer:
             slow *= 0.35
+        # An embryo cannot crawl, an ageing animal crawls worse, and a dead
+        # one does not crawl at all.
+        slow *= self.life.locomotion_scale()
         forward *= slow
         backward *= slow
 
@@ -284,7 +287,8 @@ class WormSimulation:
 
         life_dt = dt * self.cfg.life_speedup
         events = self.life.step(life_dt, food=food, temp_c=temp,
-                                pheromone=pher, serotonin_scale=serotonin)
+                                pheromone=pher, serotonin_scale=serotonin,
+                                longevity_scale=self.genome.longevity_scale())
         if food > 0.01:
             from .lifecycle import FOOD_PER_PUMP
             eaten = self.life.pump_hz * FOOD_PER_PUMP * life_dt * min(food, 1.0)

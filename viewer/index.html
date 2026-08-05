@@ -153,6 +153,9 @@ body.network #hud{display:none}
     <div class="kv"><span>body length</span><span id="blen">1.11 mm</span></div>
     <div class="kv"><span>pharyngeal pumping</span><span id="pump">0 Hz</span></div>
     <div class="kv"><span>eggs laid</span><span id="eggs">0</span></div>
+    <div class="kv"><span>self-sperm left</span><span id="sperm">-</span></div>
+    <div class="kv"><span>movement class</span><span id="mclass">A</span></div>
+    <div id="milestone" class="sub"></div>
     <div class="kv"><span>reserves</span><span id="resv">-</span></div>
     <div class="bar"><i id="resvb" style="width:60%;background:#8fd14f"></i></div>
     <div class="kv"><span>development speed</span><span id="lsv">400&times;</span></div>
@@ -163,6 +166,7 @@ body.network #hud{display:none}
            oninput="setEnv('background_pheromone',this.value,'phv','')">
     <div class="sub">crowding + scarce food in late L1 &rarr; dauer</div>
     <div class="row">
+      <button onclick="cmd({cmd:'set',restart_as_egg:1})">new fertilised egg</button>
       <button onclick="cmd({cmd:'set',restart_as_L1:1})">hatch a new L1</button>
       <button onclick="dropFood()">drop bacteria</button>
     </div>
@@ -701,10 +705,22 @@ function updatePanel(f){
     : '<span style="color:#8b98ad">no active sensory drive</span>';
   const L=t.life;
   if(L){
-    const tag = L.dauer ? 'dauer' : (L.arrested ? L.stage+' (arrested)' : L.stage);
+    const dead = !L.alive;
+    const tag = dead ? ('dead ('+L.cause_of_death+')')
+              : L.dauer ? 'dauer'
+              : L.arrested ? L.stage+' (arrested)' : L.stage;
     $('lifestage').textContent = tag;
-    $('lifestage').style.color = L.dauer ? '#e8a33d' : (L.arrested ? '#e2565f' : '#e6edf7');
-    $('age').textContent = L.age_h.toFixed(1)+' h';
+    $('lifestage').style.color = dead ? '#e2565f'
+      : L.dauer ? '#e8a33d' : (L.arrested ? '#e2565f' : '#e6edf7');
+    $('sperm').textContent = L.stage==='adult'||dead ? L.self_sperm : '-';
+    $('mclass').textContent = dead ? 'dead' : L.movement_class;
+    $('mclass').style.color = {A:'#5ad1c4',B:'#e8a33d',C:'#e2565f',dead:'#e2565f'}[L.movement_class]||'#e6edf7';
+    // During embryogenesis, say what is actually happening in the eggshell.
+    $('milestone').textContent = L.milestone
+      ? `${L.milestone} - ${Math.round(L.stage_progress*100)}% to hatching`
+      : (dead ? `lived ${L.adult_day.toFixed(1)} adult days, laid ${L.eggs_laid} eggs` : '');
+    $('age').textContent = L.adult_day > 0
+      ? `adult day ${L.adult_day.toFixed(1)}` : `${L.age_h.toFixed(1)} h`;
     $('blen').textContent = L.body_length_mm.toFixed(3)+' mm';
     $('pump').textContent = L.pump_hz.toFixed(1)+' Hz';
     $('eggs').textContent = L.eggs_laid;
@@ -712,7 +728,7 @@ function updatePanel(f){
     $('resvb').style.width = (L.reserves*100)+'%';
     $('resvb').style.background = L.starving ? '#e2565f' : '#8fd14f';
     // Keep the collapsed-section summaries informative.
-    $('tagLife').textContent = `${tag} · ${(L.reserves*100).toFixed(0)}%`;
+    $('tagLife').textContent = dead ? 'dead' : `${tag} · ${(L.reserves*100).toFixed(0)}%`;
     $('tagLife').style.color = L.starving ? '#e2565f' : 'var(--accent)';
   }
   const kos = t.knockouts||[];

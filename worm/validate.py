@@ -172,6 +172,32 @@ def _mec10():
     return m10 > m4, f"touch gain mec-10={m10} > mec-4={m4}"
 
 
+@check("harsh touch survives mec-4 and keeps its direction",
+       "harsh prodding is MEC-4 independent, so mec-4 nulls respond at "
+       "wild-type levels; anterior harsh touch still reverses (via FLP) and "
+       "posterior harsh touch still drives forward (via PVD)",
+       "Li, Kang, Piggott, Feng & Xu 2011 Nat Commun 2:315; Husson et al. "
+       "2012 Curr Biol 22:743")
+def _harsh():
+    def harsh(u, kos=()):
+        n = 0
+        for seed in range(3):
+            s = _sim(kos, seed=seed)
+            for _ in range(500):
+                s.step()
+            r0 = s.state.reversal_count
+            s.env.poke(u, strength=2.2, duration=0.4, harsh=True)
+            for _ in range(150):
+                s.step()
+            n += s.state.reversal_count - r0
+        return n
+    wt_ant, ko_ant = harsh(0.15), harsh(0.15, ("mec-4",))
+    wt_post = harsh(0.85)
+    ok = wt_ant >= 2 and ko_ant >= 2 and wt_post == 0
+    return ok, (f"anterior harsh: wild type {wt_ant}/3, mec-4 {ko_ant}/3; "
+                f"posterior harsh: {wt_post}/3 reversals (forward escape)")
+
+
 @check("unc-25 is a shrinker",
        "GABA loss: body shortens and bending amplitude falls, but not paralysed",
        "Jin et al. 1999; Deng et al. 2021 eNeuro (reduced speed and amplitude)")
@@ -262,6 +288,80 @@ def _swim():
     return swim < crawl["speed"], \
         f"water {swim:.3f} vs agar {crawl['speed']:.3f} mm/s " \
         f"(low drag ratio gives less thrust per stroke)"
+
+
+def _run_life(longevity: float = 1.0, temp: float = 20.0, dt: float = 60.0):
+    """Run one animal from fertilised egg to death, without the neural sim."""
+    from .lifecycle import Lifecycle
+    L = Lifecycle()
+    marks: dict = {}
+    t = 0.0
+    while L.alive and t < 90 * 86400:
+        ev = L.step(dt, food=1.0, temp_c=temp, pheromone=0.0,
+                    longevity_scale=longevity)
+        t += dt
+        for k in ("hatch", "adult", "sperm_exhausted", "death"):
+            if k in ev and k not in marks:
+                marks[k] = L.age_s / 3600.0
+    return L, marks
+
+
+@check("development timing egg to adult",
+       "embryo ~14.2 h, then ~50.7 h from hatch to adult at 20 C",
+       "Sulston et al. 1983 (800 min lineage clock); Faerberg, Gurarie & "
+       "Ruvinsky 2022 BMC Biol 20:87 (50.67 +/- 1.95 h hatch to adult)")
+def _dev():
+    L, m = _run_life()
+    embryo = m.get("hatch", 0.0)
+    larval = m.get("adult", 0.0) - embryo
+    ok = 13.0 <= embryo <= 15.5 and 46.0 <= larval <= 55.0
+    return ok, f"embryo {embryo:.1f} h, hatch to adult {larval:.1f} h"
+
+
+@check("brood size is sperm-limited",
+       "~300 self progeny over a ~5 day reproductive period, ending when the "
+       "fixed store of self-sperm runs out rather than when oocytes do",
+       "Hodgkin & Barnes 1991 (mean 327); Ward & Carrel 1979; Huang et al. "
+       "2004 (5.8 +/- 2.0 d fertile period)")
+def _brood():
+    L, m = _run_life()
+    period_d = (m.get("sperm_exhausted", 0.0) - m.get("adult", 0.0)) / 24.0
+    ok = 250 <= L.eggs_laid <= 360 and 3.5 <= period_d <= 7.0 and L.self_sperm == 0
+    return ok, (f"{L.eggs_laid} eggs over {period_d:.1f} d, "
+                f"{L.self_sperm} sperm left")
+
+
+@check("the animal ages and dies",
+       "mean adult lifespan ~15 d at 20 C, preceded by decline in pumping and "
+       "locomotion class",
+       "Huang, Xiong & Kornfeld 2004 PNAS (15.2 +/- 3.6 d); Herndon et al. "
+       "2002 Nature (movement classes A/B/C)")
+def _death():
+    L, _ = _run_life()
+    ok = (not L.alive and L.cause_of_death == "senescence"
+          and 11.0 <= L.adult_day <= 20.0)
+    return ok, (f"died on adult day {L.adult_day:.1f} as class "
+                f"{L.movement_class}, cause {L.cause_of_death}")
+
+
+@check("daf-2 longevity requires daf-16",
+       "daf-2 loss roughly doubles lifespan, and removing daf-16 as well "
+       "abolishes the extension completely; eat-2 does not need daf-16",
+       "Kenyon et al. 1993 Nature 366:461; Lakowski & Hekimi 1998 PNAS")
+def _daf():
+    from .genome import Genome
+
+    def scale(*kos):
+        g = Genome.load()
+        for k in kos:
+            g.knock_out(k)
+        return g.longevity_scale()
+
+    d2, d2_16 = scale("daf-2"), scale("daf-2", "daf-16")
+    e2, e2_16 = scale("eat-2"), scale("eat-2", "daf-16")
+    ok = d2 >= 1.8 and d2_16 < 1.05 and e2 > 1.2 and e2_16 > 1.1
+    return ok, (f"daf-2 x{d2:.2f} -> daf-2;daf-16 x{d2_16:.2f} (abolished); "
+                f"eat-2 x{e2:.2f} -> eat-2;daf-16 x{e2_16:.2f} (retained)")
 
 
 def main(verbose: bool = True) -> int:
