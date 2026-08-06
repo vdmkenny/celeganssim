@@ -428,12 +428,13 @@ def _expression_truth():
 
 @check("receptor-derived signs match documented synapses",
        "AWC->AIY is inhibitory (glutamate-gated chloride); the neuromuscular "
-       "junction is acetylcholine-excitatory and GABA-inhibitory",
+       "junction is acetylcholine-excitatory and GABA-inhibitory, the latter "
+       "at the muscle chloride reversal rather than the neuronal one",
        "Chalasani et al. 2007 Nature 450:63; Jospin et al. 2002; "
        "Bamber et al. 1999",
        section="consistency")
 def _sign_truth():
-    from .connectome import Connectome, E_EXC, E_INH
+    from .connectome import E_EXC, E_INH, E_INH_MUSCLE, Connectome
     c = Connectome.load()
     awc = all(c.E_syn[c.index[post], c.index[pre]] == E_INH
               for pre in ("AWCL", "AWCR") for post in ("AIYL", "AIYR")
@@ -446,7 +447,7 @@ def _sign_truth():
         nts = c.pre_nt[i]
         if "Acetylcholine" in nts and c.E_syn[j, i] != E_EXC:
             nmj_ok = False
-        if "GABA" in nts and c.E_syn[j, i] != E_INH:
+        if "GABA" in nts and c.E_syn[j, i] != E_INH_MUSCLE:
             nmj_ok = False
     n_derived = c.sign_provenance.get("receptor_expression", 0)
     return awc and nmj_ok and n_derived > 0, \
