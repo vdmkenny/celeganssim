@@ -31,7 +31,7 @@ processed files.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 32 checks against published measurements, in parallel
+worm validate         # 33 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -192,10 +192,11 @@ measured by patch clamp.
 | `worm/nervous_system.py` | graded-potential dynamics, ablation |
 | `worm/sensory.py` | environment to current, mechanosensory receptive fields |
 | `worm/body.py` | oscillator, muscle to curvature, low-Reynolds locomotion |
+| `worm/kinematics.py` | gait measurement: frequency, wavelength, wave direction |
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 32 checks: 22 behavioural, 10 consistency, gaps as expected failures |
+| `worm/validate.py` | 33 checks: 23 behavioural, 10 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry with provenance tags |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -223,9 +224,9 @@ rather than making it, so are not modelled as GABAergic.
 
 ## Validation
 
-`worm validate` runs 32 checks against published measurements: 22 behavioural
+`worm validate` runs 33 checks against published measurements: 23 behavioural
 (the animal is run and measured) and 10 consistency checks (parameter and data
-invariants). 27 pass. Five are registered expected failures, each naming the
+invariants). 27 pass. Six are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
@@ -279,6 +280,10 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 
 - **The locomotor rhythm is imposed, not emergent.** The network sets its
   amplitude, direction and frequency, but the oscillation itself is modelled.
+  `SimConfig(emergent_muscles=True)` instead drives the body from the muscle
+  cells the connectome actually drives, through the same mechanical path. An
+  animal in that mode covers 0.005 mm in 40 s against 16.4 mm on the scripted
+  oscillator, which is the size of the gap end to end.
   The connectome as wired delivers no undulatory rhythm to the muscles: the
   dorsoventral difference in real muscle activation has a standard deviation of
   0.003 against the scripted oscillator's 0.599, and a peak-to-median spectral

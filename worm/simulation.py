@@ -27,6 +27,12 @@ HEAD_DORSAL = ["SMDDL", "SMDDR", "RMDDL", "RMDDR"]
 HEAD_VENTRAL = ["SMDVL", "SMDVR", "RMDVL", "RMDVR"]
 
 
+# Activation of an undriven muscle. Each cell's threshold is solved to its own
+# resting potential, so a muscle at rest reads exactly 0.5 rather than 0, and
+# that is where it produces no force.
+MUSCLE_REST_ACTIVATION = 0.5
+
+
 @dataclass
 class SimConfig:
     dt: float = 0.02              # body/world timestep, seconds
@@ -55,6 +61,12 @@ class SimConfig:
     tonic_forward: float = 0.62   # baseline AVB drive -> spontaneous forward
     command_gain: float = 9.0
     seed: int = 0
+    # Drive the body from the muscle cells the connectome actually drives,
+    # instead of from the scripted ventral-cord oscillator. Off by default:
+    # the network delivers no undulatory rhythm on its own, so an animal in
+    # this mode barely moves until proprioceptive feedback closes the loop.
+    # See docs/emergent-cpg.md and the "network drives the muscles" check.
+    emergent_muscles: bool = False
     start_adult: bool = True      # False starts as a freshly hatched L1
     # How many seconds of development pass per second of simulated behaviour.
     # Real development takes ~50 h, which nobody wants to watch in real time.
@@ -78,6 +90,7 @@ PROVENANCE = {
     "tonic_forward": "scripted",  # stands in for AVB->B tonic drive
     "command_gain": "tuned",
     "seed": "tuned",
+    "emergent_muscles": "scripted",
     "start_adult": "tuned",
     "life_speedup": "tuned",      # display convenience, not biology
 }
@@ -136,6 +149,13 @@ class WormSimulation:
             self.conn.group(vnc_class="DA") + self.conn.group(vnc_class="VA"))
         self.i_muscle = np.where(self.conn.is_muscle)[0]
         self._muscle_rows()
+        # Positions of each segment's muscles within the calcium array, which
+        # is indexed over muscle cells only rather than over the whole network.
+        pos = {int(i): k for k, i in enumerate(self.ns._muscle_idx)}
+        self.ca_row_d = [np.array([pos[i] for i in r], dtype=int)
+                         for r in self.row_d]
+        self.ca_row_v = [np.array([pos[i] for i in r], dtype=int)
+                         for r in self.row_v]
 
         self.state = SimState()
         self.reset()
@@ -167,6 +187,23 @@ class WormSimulation:
             seg = min(int((info["row"] - 1) / max_row * N_SEG), N_SEG - 1)
             (self.row_d if info["side"] == "dorsal" else self.row_v)[seg].append(
                 self.conn.idx(name))
+
+    def muscle_force(self) -> tuple[np.ndarray, np.ndarray]:
+        """Per-segment dorsal and ventral force from real muscle calcium.
+
+        Force is taken proportional to calcium above its resting level. That
+        proportionality is an assumption, not a measurement: C. elegans muscle
+        has no measured length-tension relation, no measured force-velocity
+        relation and no calibrated calcium-to-force transfer function. Butler
+        et al. 2015 state this and substitute a relation borrowed from a
+        neuromechanical model; this is the same placeholder.
+        """
+        ca = self.ns.muscle_calcium()
+        rest = MUSCLE_REST_ACTIVATION
+        f = np.clip((ca - rest) / (1.0 - rest), 0.0, 1.0)
+        d = np.array([f[r].mean() if r.size else 0.0 for r in self.ca_row_d])
+        v = np.array([f[r].mean() if r.size else 0.0 for r in self.ca_row_v])
+        return d, v
 
     def reset(self, x: float = 0.0, y: float = 0.0, heading: float = 0.0) -> None:
         self.ns.reset()
@@ -349,12 +386,19 @@ class WormSimulation:
         head_bias = self._head_bias(act, turn_cmd)
 
         self.body.p.curvature_gain = BodyParams.curvature_gain * np.clip(bend, 0.3, 2.0)
-        self.body.step_oscillator(
-            dt, forward_drive=forward, backward_drive=backward,
-            gaba_scale=float(np.clip(gaba, 0.0, 1.0)),
-            head_bias=head_bias,
-            arousal=float(np.clip(arousal, 0.3, 2.0) * max(rate_scale, 0.05)))
-        self._drive_muscles()
+        if self.cfg.emergent_muscles:
+            # Shape follows the muscle cells the connectome actually drives.
+            d, v = self.muscle_force()
+            self.body.drive_from_muscles(dt, d, v)
+            self.muscle_activation = np.zeros(self.conn.n)
+            self.muscle_activation[self.ns._muscle_idx] = self.ns.muscle_calcium()
+        else:
+            self.body.step_oscillator(
+                dt, forward_drive=forward, backward_drive=backward,
+                gaba_scale=float(np.clip(gaba, 0.0, 1.0)),
+                head_bias=head_bias,
+                arousal=float(np.clip(arousal, 0.3, 2.0) * max(rate_scale, 0.05)))
+            self._drive_muscles()
 
         prev = self.body.X.copy()
         self.body.step_motion(dt, drag_ratio=self.env.drag_ratio)

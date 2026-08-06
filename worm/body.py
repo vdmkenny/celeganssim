@@ -55,6 +55,10 @@ class BodyParams:
     # Body shortening when dorsal and ventral contract together (the
     # "shrinker" axis that GABA mutants fall down).
     max_shortening = 0.28
+    # How hard co-contraction has to be before it shortens the animal fully.
+    # Fit to the shrinker phenotype, not measured: no relation between muscle
+    # activation and body length has been recorded in this animal.
+    co_contraction_gain = 2.2
 
 
 # Provenance tags for the parameter registry (worm/parameters.py). Citations
@@ -68,6 +72,7 @@ PROVENANCE = {
     "drag_ratio": "published",     # RFT on agar, Gray & Lissmann line of work
     "drag_tangential": "published",
     "max_shortening": "tuned",     # fit to shrinker phenotype
+    "co_contraction_gain": "tuned",  # fit to shrinker phenotype
 }
 
 
@@ -164,12 +169,33 @@ class Body:
         n_head = 8
         bias[:n_head] = head_bias * np.linspace(1.0, 0.2, n_head)
 
-        self.dorsal = np.clip(d_exc - d_inh + bias, 0.0, 1.0)
-        self.ventral = np.clip(v_exc - v_inh - bias, 0.0, 1.0)
+        self.drive_from_muscles(dt,
+                                np.clip(d_exc - d_inh + bias, 0.0, 1.0),
+                                np.clip(v_exc - v_inh - bias, 0.0, 1.0))
+
+    def drive_from_muscles(self, dt: float, dorsal: np.ndarray,
+                           ventral: np.ndarray) -> None:
+        """Turn per-segment muscle force into body shape.
+
+        The only mechanical step, shared by the scripted oscillator and by the
+        path that reads the real muscle cells, so the two differ in where the
+        activation comes from and in nothing else.
+
+        Opposing muscle produces bending, co-contraction produces shortening.
+        The force a given activation exerts is an assumption: no length-tension
+        or force-velocity relation has ever been measured for C. elegans muscle,
+        and Butler et al. 2015 say so explicitly before substituting a relation
+        borrowed from a neuromechanical model. Curvature is taken proportional
+        to the dorsoventral difference, which is that same placeholder.
+        """
+        p = self.p
+        self.dorsal = np.clip(dorsal, 0.0, 1.0)
+        self.ventral = np.clip(ventral, 0.0, 1.0)
 
         # Co-contraction shortens the animal.
         co = float(np.mean(np.minimum(self.dorsal, self.ventral)))
-        self.length_scale = 1.0 - p.max_shortening * np.clip(co * 2.2, 0.0, 1.0)
+        self.length_scale = 1.0 - p.max_shortening * np.clip(
+            co * p.co_contraction_gain, 0.0, 1.0)
 
         target_kappa = np.clip(
             p.curvature_gain * (self.dorsal - self.ventral),

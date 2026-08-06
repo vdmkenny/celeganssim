@@ -112,6 +112,33 @@ def _wt():
     return ok, f"speed {g['speed']:.3f} mm/s, amplitude {g['amplitude']*100:.1f}% BL"
 
 
+@check("the animal locomotes on connectome drive alone",
+       "with the body driven by the muscle cells the connectome actually "
+       "drives, rather than by the scripted oscillator, the animal should "
+       "still crawl at a wild-type speed. This is the end-to-end version of "
+       "the drive check: it measures displacement, not activation",
+       "Cronin et al. 2005 Genetics: N2 0.20 +/- 0.04 mm/s",
+       xfail="the animal is effectively stationary in this mode, covering "
+             "0.005 mm in 40 s against 16.4 mm on the scripted oscillator, "
+             "because the connectome supplies no undulatory rhythm to bend it "
+             "with. The mechanical path is complete and shared with the "
+             "scripted path, so what is missing is upstream: proprioceptive "
+             "feedback to make motor neuron output oscillate (issue #10)")
+def _emergent_locomotion():
+    from .simulation import SimConfig
+    from .environment import Environment
+    env = Environment(width=44.0, height=32.0)
+    s = WormSimulation(env=env, config=SimConfig(seed=0, emergent_muscles=True))
+    for _ in range(int(10.0 / s.cfg.dt)):
+        s.step()
+    d0 = s.state.distance
+    seconds = 45.0
+    for _ in range(int(seconds / s.cfg.dt)):
+        s.step()
+    speed = (s.state.distance - d0) / seconds
+    return 0.15 <= speed <= 0.40, f"speed {speed:.4f} mm/s on connectome drive"
+
+
 @check("muscle activation leads curvature by the measured phase",
        "peak muscle activation should sit about 45 degrees, an eighth of a "
        "cycle, ahead of peak midline curvature",
