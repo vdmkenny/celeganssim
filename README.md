@@ -180,10 +180,23 @@ no C. elegans muscle calcium measurement has ever been calibrated to nM or uM.
 At the neuromuscular junction, acetylcholine acts on a non-selective cation
 channel reversing near 0 mV and GABA on the chloride-permeant UNC-49 receptor
 reversing near -30 mV, so against a -25 mV resting potential GABA contributes
-5 mV of hyperpolarising drive and acts largely by shunting. Synaptic strength
-follows from the wiring: connectome contact counts times the per-contact
-conductance give 5.0 nS of cholinergic conductance per muscle, against 8.5 nS
-measured by patch clamp.
+5 mV of hyperpolarising drive and acts largely by shunting. The per-contact
+neuromuscular conductance is calibrated so that a muscle's achievable
+whole-cell cholinergic conductance matches the 8.5 nS measured by patch clamp.
+Achievable rather than nominal matters here: the synaptic release variable
+cannot exceed a_r/(a_r + a_d), so a synapse delivers at most a sixth of its
+per-contact conductance and spans only 1.83x from rest to saturation.
+
+Muscle fires all-or-none calcium action potentials, and those spikes are what
+drive contraction. The inward conductance is measured twice over: Jospin's
+peak EGL-19 density of 199 S/F at 70 pF gives 13.9 nS, and the measured
+maximum upstroke rate of 1.38 V/s across 70 pF needs 9.2 nS against the 8.9 nS
+the steady-state density gives. Inactivation is partial, and its residual is
+measured too, the maintained component being 127 S/F of the 199 S/F peak. The
+repolarising side is fitted, since neither SHK-1 nor SLO-2 has a published
+body-wall muscle current-voltage relation; it is fitted to the measured
+waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
+45 to 53 mV and 15.5 to 20 ms.
 
 | Module | Role |
 |---|---|
@@ -290,14 +303,13 @@ potentials, developmental timings, body sizes, brood size, lifespan.
   power ratio of 8 where a clean rhythm is orders of magnitude. Motor neurons
   sit at their solved resting equilibrium and nothing displaces them.
   `worm validate` carries this as a registered expected failure.
-- **Body-wall muscle does not spike.** The animal answers a ~68 pA
-  postsynaptic current with an all-or-none calcium action potential of 45 to
-  53 mV, and those spikes are what drive contraction (Gao & Zhen 2011). Muscle
-  here is a passive integrator, so graded neuromuscular input moves a 1 GOhm
-  cell only a few millivolts. This is the reason an imposed bend propagates at
-  slope 0.135 rather than the measured 0.62: the proprioceptive coupling is
-  wired and saturating its motor neurons, but there is no regenerative step to
-  turn that into force.
+- **Muscle spikes are not reached from synaptic input.** Muscle carries the
+  measured calcium action potential, but crossing its -10 mV threshold needs
+  about 2.4 nS of extra excitatory conductance, close to the 2.26 nS implied
+  by the measured 67.9 pA trigger current, and one junction spans only 1.83x
+  from rest to saturation. Propagation along the body is therefore still
+  subthreshold and graded rather than spike-mediated, which is why an imposed
+  bend propagates at slope 0.364 rather than the measured 0.62.
   [docs/emergent-cpg.md](docs/emergent-cpg.md) sets out what an emergent version
   requires. No published model produces C. elegans locomotion emergently from
   the connectome.
@@ -352,7 +364,7 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 - [Liu, Chen & Wang (2020), Nat. Commun. 11:5076](https://doi.org/10.1038/s41467-020-18893-9) (gap junction conductance)
 - [Shindou et al. (2019), Sci. Rep. 9:3430](https://doi.org/10.1038/s41598-019-40158-9)
 - [Jospin et al. (2002), J. Cell Biol. 159:337](https://doi.org/10.1083/jcb.200203055) (calcium reversal; muscle resting potential -19.7 mV and input resistance 1.0 GOhm)
-- [Gao & Zhen (2011), PNAS 108:2557](https://doi.org/10.1073/pnas.1012346108) (muscle resting potential -25.0 mV, calcium action potentials)
+- [Gao & Zhen (2011), PNAS 108:2557](https://doi.org/10.1073/pnas.1012346108) (muscle resting potential -25.0 mV, calcium action potentials, 67.9 pA trigger current)
 - [Richmond (2006), WormBook](https://doi.org/10.1895/wormbook.1.112.1) (neuromuscular junction recording; muscle capacitance ~70 pF)
 - [Richmond & Jorgensen (1999), Nat. Neurosci. 2:791](https://doi.org/10.1038/12160) (one GABA and two acetylcholine receptors at the NMJ; 774 pA acetylcholine response, chloride-permeant UNC-49)
 - [C. elegans Neural Interactome](https://github.com/shlizee/C-elegans-Neural-Interactome)

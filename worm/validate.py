@@ -121,17 +121,17 @@ def _wt():
        "linearly with imposed anterior curvature, slope 0.62 +/- 0.03; the "
        "channel's posterior limit sits at body position 0.7",
        xfail="the model propagates the bend in the right direction and "
-             "linearly, but at slope 0.135 against 0.62, and raising the "
-             "stretch gain does not help: at gain 30 the B-type neurons are "
-             "already saturated, DB at activation 1.000 and VB at 0.000, while "
-             "the muscle depolarises only about 3 mV and produces a force "
-             "difference of 0.07. The bottleneck is downstream of the neurons, "
-             "at the muscle: graded neuromuscular input alone moves a 1 GOhm "
-             "cell a few mV, where the animal answers a ~68 pA postsynaptic "
-             "current with an all-or-none calcium action potential of 45-53 mV "
-             "(Gao & Zhen 2011). Without that regenerative step there is no "
-             "force to propagate with, so this closes when the muscle can "
-             "spike, not by retuning the coupling")
+             "linearly, at slope 0.364 against the measured 0.62. Giving "
+             "muscle its calcium action potential and putting the "
+             "neuromuscular conductance on the measured junction moved this "
+             "from 0.117, so the remaining factor is under two. What is still "
+             "missing is that muscles do not reach the -10 mV spike threshold "
+             "from synaptic input alone: crossing it needs about 2.4 nS of "
+             "extra excitatory conductance, close to the 2.26 nS the measured "
+             "trigger current of 67.9 pA implies, but the release variable "
+             "cannot exceed a_r/(a_r + a_d) so one junction spans only 1.83x "
+             "from rest to saturation. Propagation here is therefore still "
+             "subthreshold and graded rather than spike-mediated")
 def _bend_propagation():
     from .body import N_SEG
     from .simulation import SimConfig
@@ -610,13 +610,15 @@ def _sign_truth():
 
 
 @check("neuromuscular conductance matches the measured junction",
-       "the whole-cell cholinergic conductance of a body-wall muscle should "
-       "come out near the patch-clamp value. This tests a load-bearing "
-       "assumption: that connectome contact counts times a generic per-contact "
-       "conductance give physiological synaptic strength. Also that the "
-       "junction's reversal potentials are the measured ones, a non-selective "
-       "cation channel near 0 mV for acetylcholine and the chloride "
-       "equilibrium near -30 mV for GABA, not the neuronal -48 mV",
+       "the ACHIEVABLE whole-cell cholinergic conductance of a body-wall "
+       "muscle should come out near the patch-clamp value. Achievable, not "
+       "nominal: the synaptic release variable cannot exceed a_r/(a_r + a_d), "
+       "so a synapse delivers at most a sixth of its per-contact conductance, "
+       "and comparing the nominal figure overstates junction strength about "
+       "sixfold. Also that the junction's reversal potentials are the measured "
+       "ones, a non-selective cation channel near 0 mV for acetylcholine and "
+       "the chloride equilibrium near -30 mV for GABA, not the neuronal "
+       "-48 mV",
        "Richmond & Jorgensen 1999 Nat Neurosci 2:791: acetylcholine 774 +/- 79 "
        "pA (n=22) at -80 mV holding, E_rev +11 mV -> 8.5 nS; GABA receptor "
        "chloride-permeant. Gao & Zhen 2011 PNAS 108:2557: E_Cl about -30 mV",
@@ -630,19 +632,23 @@ def _nmj():
     c = Connectome.load()
     ns = NervousSystem(c, Genome.load())
     m = c.is_muscle
-    Gs = c.Gs * ns.p.g_syn                      # nS at full activation
+    Gs = c.Gs * ns.g_syn_row
     E = c.E_syn
     # Pressure-ejected acetylcholine activates the cholinergic receptors only,
-    # so the comparable quantity is the excitatory conductance.
-    chol = np.median((Gs * (E > E_INH_MUSCLE / 2.0))[m].sum(axis=1))
+    # so the comparable quantity is the excitatory conductance, and it has to
+    # be scaled by the ceiling on the release variable to be what the junction
+    # can actually deliver.
+    s_max = ns.p.a_r / (ns.p.a_r + ns.p.a_d)
+    chol = np.median((Gs * (E > E_INH_MUSCLE / 2.0))[m].sum(axis=1)) * s_max
     measured = 774.0 / (80.0 + 11.0)            # pA / mV -> nS
     ratio = chol / measured
     e_on_muscle = E[m][Gs[m] > 0]
     ok = (0.3 <= ratio <= 3.0
           and abs(e_on_muscle.max() - 0.0) < 1.0
           and abs(e_on_muscle.min() - E_INH_MUSCLE) < 1.0)
-    return ok, (f"cholinergic {chol:.2f} nS per muscle against {measured:.2f} "
-                f"measured ({ratio:.2f}x); junction reversals "
+    return ok, (f"achievable cholinergic {chol:.2f} nS per muscle against "
+                f"{measured:.2f} measured ({ratio:.2f}x); release ceiling "
+                f"{s_max:.3f}; junction reversals "
                 f"{e_on_muscle.min():.0f} to {e_on_muscle.max():.0f} mV")
 
 
