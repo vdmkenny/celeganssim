@@ -146,3 +146,105 @@ produces the same crawling animation from a sine wave with no nervous system.
 
 The oscillator here is labelled as such, uses every connectome weight, and lets
 the network set direction and amplitude.
+
+---
+
+# What was tried, and why each attempt failed
+
+A sustained attempt to replace the scripted oscillator with a rhythm generated
+by the neuromechanical loop. It did not succeed. The mechanisms it added are on
+`main` and are worth having on their own; the rhythm is not there. This records
+what was tried so it is not tried again blind, and branch
+`release-cooperativity` holds the code for the last two attempts.
+
+## How progress was measured
+
+Three acceptance tests, all registered in `worm validate`, all reading only
+what a tracking microscope or an electrode would see.
+
+- **Drive**: the dorsoventral difference in real muscle activation must
+  oscillate, with a clean spectral peak in the 0.2-1.2 Hz band.
+- **Propagation**: an imposed bend must carry to the region behind it at the
+  slope Wen et al. measured, 0.62.
+- **Displacement**: with the body driven by real muscle output, the animal must
+  crawl at wild-type speed.
+
+A fourth measure decided several arguments: `posterior_fraction`, the ratio of
+posterior to anterior bending, which separates a travelling wave from one that
+dies behind the head.
+
+**Do not use wild-type gait to judge any of this.** In the default
+configuration the body is driven by the scripted oscillator, so gait passes
+whatever the network is doing. One bisect in this project reached exactly the
+wrong conclusion by using it, and had to be redone against network state.
+
+## The attempts
+
+**Proprioceptive coupling alone.** Wired each B-type motor neuron to the
+curvature 0.2 body lengths in front of it, the measured geometry. Nothing
+happened, and the literature says it should not have: the connectome supplies
+no oscillation to propagate, and Wen et al.'s own account has the head as a
+separate pacemaker. Measured drive at the muscles was sd 0.003 against the
+scripted oscillator's 0.599, with a spectral peak of 8 where a clean tone is
+orders of magnitude.
+
+**Head pacemaker plus proprioception.** Driving RMD and SMD in antiphase gave a
+real rhythm at the right frequency and amplitude, and it did not travel.
+Posterior bending reached 0.052 of anterior and the last eight of twenty-four
+segments never moved.
+
+**Muscle action potentials.** Body-wall muscle fires calcium spikes and those
+spikes drive contraction, so the model got them, with the inward conductance
+confirmed twice over. It changed nothing, because the muscles never reached
+threshold.
+
+**Neuromuscular recalibration.** Finding that exposed an error: the junction
+had been calibrated against the conductance a synapse would carry at full
+release, but the release variable cannot exceed `a_r/(a_r + a_d)`, so the
+achievable figure was 11% of the measured junction rather than the 59%
+claimed. Fixing it moved propagation from 0.117 to 0.364. Still short of 0.62,
+and the muscles still did not spike.
+
+**Synthetic posterior innervation.** Giving posterior muscles the neck's
+innervation, to separate a model limit from a data limit. The first version
+raised posterior bending to 0.62 and was an artefact: spreading each class's
+weight over all its members let every posterior muscle hear every B-type
+neuron, so the posterior followed the head directly rather than a wave
+arriving. Preserving topography, the same fill reaches 0.13 to 0.18.
+
+**Release cooperativity.** The muscle turned out to be capped by arithmetic
+rather than by wiring, at `E_muscle * s_eq/s_max = -13.6 mV` against a -10 mV
+spike threshold, because the threshold solve holds rest by an ever more
+negative leak. Making release go as the fourth power of calcium lifted the cap,
+dropped out-of-range leak reversals from 111 cells to 16, and let muscle reach
+-3.0 mV. It also collapsed the network: 260 of 473 cells saturated and the
+median cell drifted 19 mV off its own threshold.
+
+**Stabilisers.** Synaptic depression rescues that collapse, and a standing
+potassium conductance rescues it further. Both cost speed: gait falls from
+0.239 mm/s to 0.119 and then to 0.088. Neither was calibrated against a
+behavioural target, which is the fixable part.
+
+## What is ruled out
+
+**More or better wiring is not the answer.** The posterior body carries 6.3
+presynaptic partners per muscle against a published ~10, and Cook et al.
+describe those gaps as "unquestionably artefactual". No other dataset fills
+them: the White 1986 releases carry no neuron-to-muscle edges at all, all eight
+Witvliet 2021 specimens are nerve ring only, and Cook's own corrected 2020
+matrices keep the same gradient. Filling the gap synthetically does not rescue
+the wave either.
+
+**Retuning the proprioceptive coupling is not the answer.** Its gain saturates
+the B-type motor neurons long before the muscles respond.
+
+**Keeping cooperativity without a stabiliser is not an option.** It collapses
+the network, and gait does not reveal that.
+
+## The one open question
+
+Whether a stabiliser exists that does not cost gait speed. Depression and the
+standing potassium conductance are both real mechanisms and both work; their
+parameters were fitted to their own measurements and never against sustained
+locomotion, and each ends up halving the animal's speed. That is a bounded
+question, unlike the ones this attempt started with.

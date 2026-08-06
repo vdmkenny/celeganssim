@@ -302,7 +302,9 @@ potentials, developmental timings, body sizes, brood size, lifespan.
   0.003 against the scripted oscillator's 0.599, and a peak-to-median spectral
   power ratio of 8 where a clean rhythm is orders of magnitude. Motor neurons
   sit at their solved resting equilibrium and nothing displaces them.
-  `worm validate` carries this as a registered expected failure. The cause is
+  `worm validate` carries this as a registered expected failure.
+  [docs/emergent-cpg.md](docs/emergent-cpg.md) records what an emergent version
+  needs, what was tried to build one, and why each attempt failed. The cause is
   now known and is structural rather than a matter of tuning or of missing
   wiring: with each cell's threshold solved to its own resting potential, a
   synapse spans only s_eq to s_max, so a muscle's driven potential is bounded
