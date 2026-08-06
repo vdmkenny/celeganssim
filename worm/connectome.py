@@ -58,6 +58,19 @@ DEFAULT_POLARITY = +0.5  # unknown transmitter: weak excitation
 # Anything asking this wiring to propagate a wave down the body is asking it
 # to do so through its thinnest region.
 #
+# No other dataset fixes this. Of the whole-body reconstructions the OpenWorm
+# ConnectomeToolbox carries, the White 1986 releases (whole, A, L4, N2U, JSH)
+# hold no neuron-to-body-wall-muscle edges at all, and all eight Witvliet 2021
+# specimens including the two adults are nerve ring only, with zero muscle.
+# Cook et al. 2019 is the only published whole-animal connectome carrying body
+# wall muscle. Its own corrected release (SI 5, corrected July 2020) keeps the
+# same gradient, 10.2 head, 13.1 neck and 6.8 body partners per muscle against
+# 10.0, 12.8 and 6.3 here, so the deficit is in the data rather than in this
+# copy of it. The legend of those matrices is explicit that "the data are
+# assembled from multiple animals and include connections added by
+# extrapolation in gaps where no data were available", and the posterior
+# gradient survives that extrapolation.
+#
 # Muscle-muscle gap junctions are also incomplete here: the edgelist carries a
 # nearest-neighbour chain within each quadrant and only one cross-quadrant
 # pair, whereas White describes left/right coupling through the muscle arms at

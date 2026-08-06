@@ -269,7 +269,11 @@ def _activation_phase():
              "45% of neuron-muscle edges are neuromuscular junctions, half of "
              "them involving sublateral motor neurons whose connectivity was "
              "extrapolated rather than traced. No wiring-derived model can "
-             "propagate a wave through a region the wiring is missing from")
+             "propagate a wave through a region the wiring is missing from, "
+             "and no other dataset fills it: the White 1986 releases carry no "
+             "neuron-to-muscle edges at all, all eight Witvliet 2021 specimens "
+             "are nerve ring only, and Cook's own corrected July 2020 matrices "
+             "keep the same gradient at 10.2, 13.1 and 6.8 partners")
 def _posterior_innervation():
     from .connectome import Connectome
     c = Connectome.load()
