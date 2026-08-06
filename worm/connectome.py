@@ -71,6 +71,20 @@ DEFAULT_POLARITY = +0.5  # unknown transmitter: weak excitation
 # extrapolation in gaps where no data were available", and the posterior
 # gradient survives that extrapolation.
 #
+# Switching to that corrected release is cheap but does not buy the thing that
+# matters. The weights are the same numbers, not a different unit: AVAL-AVAR
+# reads 18 in both, PVCL->AVBL 7, AVAL->VA05 7, so no conductance would need
+# recalibrating. All 300 neurons and all 95 muscles are present, and the
+# cell-set differences are confined to pharyngeal and glial cells this model
+# does not carry. What it adds is 4% more chemical edges, 7% more electrical,
+# and a posterior body that is better covered but still thin: 6.8 partners per
+# muscle against 6.3, and 1.26x the B-class weight onto body rows 17-24. That
+# lifts posterior B-class conductance from 0.92 to about 1.16 nS against the
+# 2.41 nS a muscle needs to reach spike threshold, so the wave would still not
+# propagate. The real cost of switching is that the file is an xlsx adjacency
+# matrix rather than a CSV edgelist, and reading it without adding a
+# dependency means a small stdlib xlsx reader.
+#
 # Muscle-muscle gap junctions are also incomplete here: the edgelist carries a
 # nearest-neighbour chain within each quadrant and only one cross-quadrant
 # pair, whereas White describes left/right coupling through the muscle arms at
