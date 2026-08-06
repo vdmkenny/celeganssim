@@ -113,11 +113,13 @@ def _wt():
 
 
 @check("passive properties match patch-clamp measurements",
-       "input resistance 1.6-8 GOhm and membrane time constant 3-10 ms; a gap "
-       "junction pair coupled at tens of pS, not nanosiemens",
+       "neuron: input resistance 1.6-8 GOhm, membrane time constant 3-10 ms, "
+       "a gap junction pair coupled at tens of pS not nanosiemens. Muscle is a "
+       "different cell type and must not inherit those: 1.0 GOhm and ~70 ms",
        "Goodman, Hall, Avery & Lockery 1998 Neuron 20:763; Shindou et al. 2019 "
        "Sci Rep 9:3430; Liu, Chen & Wang 2020 Nat Commun 11:5076 (AVAL-AVAR "
-       "56 pS)")
+       "56 pS); Jospin et al. 2002 J Cell Biol 159:337 (muscle 1.0 +/- 0.08 "
+       "GOhm, n=10); Richmond WormBook doi:10.1895/wormbook.1.112.1 (~70 pF)")
 def _passive():
     from .connectome import Connectome
     from .genome import Genome
@@ -128,16 +130,23 @@ def _passive():
     r_in = 1.0 / p.G_leak            # GOhm, since nS
     tau = p.C / p.G_leak             # ms, since pF/nS
     ava = c.Gg[c.idx("AVAR"), c.idx("AVAL")] * p.g_gap * 1000.0   # pS
-    ok = 1.5 <= r_in <= 8.5 and 3.0 <= tau <= 10.0 and 20 <= ava <= 200
-    return ok, (f"R_in {r_in:.1f} GOhm, tau_m {tau:.1f} ms, "
-                f"AVAL-AVAR coupling {ava:.0f} pS")
+    r_mus = 1.0 / p.G_leak_muscle
+    tau_mus = p.C_muscle / p.G_leak_muscle
+    ok = (1.5 <= r_in <= 8.5 and 3.0 <= tau <= 10.0 and 20 <= ava <= 200
+          and 0.9 <= r_mus <= 1.1 and 60.0 <= tau_mus <= 80.0)
+    return ok, (f"neuron R_in {r_in:.1f} GOhm, tau_m {tau:.1f} ms, "
+                f"AVAL-AVAR coupling {ava:.0f} pS; "
+                f"muscle R_in {r_mus:.2f} GOhm, tau_m {tau_mus:.0f} ms")
 
 
-@check("motor neurons rest where they were measured to rest",
+@check("cells rest where they were measured to rest",
        "VA5 -71.7 mV, VB6 -53.2 mV, VD5 -45.8 mV, with A and B class 19 mV "
-       "apart; whole network inside the -70 to -20 mV operating range",
+       "apart; body-wall muscle far depolarised of all of them at -25 mV; "
+       "whole network inside the -70 to -20 mV operating range",
        "Liu, Chen & Wang 2014 Nat Commun 5:5155 Table 1 (the only ventral cord "
-       "motor neurons ever patched); Goodman et al. 2012 WormBook")
+       "motor neurons ever patched); Gao & Zhen 2011 PNAS 108:2557 (muscle "
+       "-25.0 +/- 1.0 mV, n=27); Jospin et al. 2002 (muscle -19.7 +/- 1.8 mV, "
+       "n=12); Goodman et al. 2012 WormBook")
 def _resting():
     import numpy as np
 
@@ -151,9 +160,14 @@ def _resting():
     err = max(abs(got[k] - want[k]) for k in want)
     spread = got["VB06"] - got["VA05"]
     in_range = ns.V_th.min() > -85.0 and ns.V_th.max() < 5.0
-    ok = err < 1.0 and 15.0 < spread < 23.0 and in_range
+    # Muscle must land on its own measurement, not on the neuronal leak. The
+    # two independent reports bracket -25 to -19.7 mV.
+    mus = ns.V_th[c.is_muscle]
+    mus_ok = abs(float(np.median(mus)) - ns.p.E_muscle) < 1.0
+    ok = err < 1.0 and 15.0 < spread < 23.0 and in_range and mus_ok
     return ok, (", ".join(f"{k} {got[k]:.1f}" for k in want)
-                + f"; A-to-B spread {spread:.1f} mV; network "
+                + f"; A-to-B spread {spread:.1f} mV; muscle "
+                  f"{float(np.median(mus)):.1f} mV; network "
                   f"{ns.V_th.min():.1f} to {ns.V_th.max():.1f} mV")
 
 

@@ -158,10 +158,18 @@ ds_j/dt   = a_r * phi(V_j) * (1 - s_j) - a_d * s_j
 Integration is exponential Euler, unconditionally stable, at roughly 4x real
 time on a laptop. The per-cell activation threshold is solved as a linear system
 so the resting network sits at its own equilibrium. Passive properties follow
-patch clamp: a 0.25 nS leak for a 4 GOhm input resistance, and 5 pS per
+patch clamp: a 0.25 nS leak for a 4 GOhm input resistance, and 3 pS per
 gap-junction contact, since measured coupling is reported whole-cell across all
 contacts a pair shares. Leak reversals are solved so the network equilibrium
 lands on measured resting potentials.
+
+The 95 body-wall muscles are cells in the same network, and they are not
+neurons. Measured against a neuron they rest 40 mV depolarised (-25 mV against
+-65), are about 47x larger (70 pF against 1.5) and integrate about 12x slower
+(70 ms against 6), so they carry their own measured passive properties rather
+than inheriting the neuronal ones. The depolarised rest is attributed to a high
+chloride permeability rather than a potassium equilibrium, which is why it
+cannot be recovered from a neuronal leak.
 
 | Module | Role |
 |---|---|
@@ -308,7 +316,9 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 - [Liu, Chen & Wang (2014), Nat. Commun. 5:5155](https://doi.org/10.1038/ncomms6155) (motor neuron resting potentials)
 - [Liu, Chen & Wang (2020), Nat. Commun. 11:5076](https://doi.org/10.1038/s41467-020-18893-9) (gap junction conductance)
 - [Shindou et al. (2019), Sci. Rep. 9:3430](https://doi.org/10.1038/s41598-019-40158-9)
-- Jospin et al. (2002), J. Cell Biol. 159:337 (calcium reversal)
+- [Jospin et al. (2002), J. Cell Biol. 159:337](https://doi.org/10.1083/jcb.200203055) (calcium reversal; muscle resting potential -19.7 mV and input resistance 1.0 GOhm)
+- [Gao & Zhen (2011), PNAS 108:2557](https://doi.org/10.1073/pnas.1012346108) (muscle resting potential -25.0 mV, calcium action potentials)
+- [Richmond (2006), WormBook](https://doi.org/10.1895/wormbook.1.112.1) (neuromuscular junction recording; muscle capacitance ~70 pF)
 - [C. elegans Neural Interactome](https://github.com/shlizee/C-elegans-Neural-Interactome)
 
 **Transmitters and expression**

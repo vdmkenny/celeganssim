@@ -71,6 +71,28 @@ class NeuralParams:
     g_syn = 0.1       # conductance of one chemical synaptic contact, nS
     E_exc = 0.0       # excitatory reversal potential, mV
     E_inh = -48.0     # inhibitory reversal potential, mV (Wicks Table 1)
+
+    # --- body-wall muscle passive properties ---
+    #
+    # Muscle is not a small neuron, and the 95 body-wall muscle cells carried
+    # in the connectome are not neurons. Measured against the values above, a
+    # muscle cell rests 40 mV depolarised, is ~47x larger and integrates ~12x
+    # slower, so the neuronal parameters misstate all three.
+    #
+    # Resting potential, whole-cell current clamp:
+    #   -25.0 +/- 1.0 mV (n = 27)  Gao & Zhen 2011 PNAS 108:2557
+    #   -19.7 +/- 1.8 mV (n = 12)  Jospin et al. 2002 J Cell Biol 159:337
+    # Two labs and two preparations agree within 5 mV; the larger sample is
+    # used. This rest is far depolarised of the potassium equilibrium and is
+    # attributed to a high chloride permeability (Gao & Zhen 2011), which is
+    # why it cannot be recovered from a neuron's -65 mV leak.
+    E_muscle = -25.0        # resting potential, mV
+    # Input resistance 1.0 +/- 0.08 GOhm (n = 10), Jospin et al. 2002 -> 1 nS.
+    G_leak_muscle = 1.0     # leak conductance, nS
+    # ~70 pF, Richmond, "Electrophysiological recordings from the neuromuscular
+    # junction of C. elegans", WormBook doi:10.1895/wormbook.1.112.1.
+    C_muscle = 70.0         # membrane capacitance, pF -> tau_m = 70 ms
+
     beta = 0.125      # sigmoid steepness, 1/mV
     a_r = (1.0 / 1.5) / 1000.0   # synaptic rise rate, 1/ms  (0.667 s^-1)
     a_d = (5.0 / 1.5) / 1000.0   # synaptic decay rate, 1/ms (3.33 s^-1)
@@ -114,6 +136,9 @@ PROVENANCE = {
     "g_syn": "published",   # Kunert et al. 2014 contact conductance
     "E_exc": "published",
     "E_inh": "published",   # Wicks et al. 1996 Table 1
+    "E_muscle": "measured",      # Gao & Zhen 2011; Jospin et al. 2002
+    "G_leak_muscle": "measured", # R_in 1.0 GOhm, Jospin et al. 2002
+    "C_muscle": "measured",      # ~70 pF, Richmond WormBook
     "beta": "published",    # Kunert et al. 2014
     "a_r": "published",     # Wicks/Kunert, 1.5x time rescale
     "a_d": "published",
@@ -174,6 +199,16 @@ class NervousSystem:
             cls = conn.cell_info[name].get("vnc_class")
             if cls in MEASURED_REST:
                 self._rest_targets[conn.index[name]] = MEASURED_REST[cls]
+
+        # Per-cell passive properties. Muscle differs from neuron in all three,
+        # so they are arrays rather than scalars; see NeuralParams for the
+        # measurements. Muscle rest is measured in 27 and 12 cells respectively
+        # and is a target for calibrate_rest like any other measured cell.
+        self.C = np.where(conn.is_muscle, self.p.C_muscle, self.p.C)
+        self.G_leak = np.where(conn.is_muscle, self.p.G_leak_muscle,
+                               self.p.G_leak)
+        for i in np.where(conn.is_muscle)[0]:
+            self._rest_targets[int(i)] = self.p.E_muscle
 
         self._apply_genetics()
         self.reset()
@@ -256,9 +291,9 @@ class NervousSystem:
         Gg = self.Gg_eff * p.g_gap
         Gs = self.Gs_eff * p.g_syn
 
-        diag = p.G_leak + Gg.sum(axis=1) + s_eq * Gs.sum(axis=1)
+        diag = self.G_leak + Gg.sum(axis=1) + s_eq * Gs.sum(axis=1)
         A = np.diag(diag) - Gg
-        b = p.G_leak * self.E_leak + s_eq * (Gs * self.E_syn).sum(axis=1)
+        b = self.G_leak * self.E_leak + s_eq * (Gs * self.E_syn).sum(axis=1)
 
         try:
             return np.linalg.solve(A, b)
@@ -287,9 +322,9 @@ class NervousSystem:
             # dV/dE_leak is G_leak/G_total; step by the inverse of that.
             Gg = self.Gg_eff * self.p.g_gap
             Gs = self.Gs_eff * self.p.g_syn
-            G_tot = (self.p.G_leak + Gg.sum(axis=1)
+            G_tot = (self.G_leak + Gg.sum(axis=1)
                      + self.s_eq * Gs.sum(axis=1))[idx]
-            self.E_leak[idx] += err * (G_tot / self.p.G_leak)
+            self.E_leak[idx] += err * (G_tot / self.G_leak[idx])
         self.V_th = self._solve_thresholds()
 
     def reset(self) -> None:
@@ -324,7 +359,7 @@ class NervousSystem:
         gs_active = Gs * s[np.newaxis, :]
         I_syn = V * gs_active.sum(axis=1) - (gs_active * self.E_syn).sum(axis=1)
 
-        dV = (-p.G_leak * (V - self.E_leak) - I_gap - I_syn + I_ext) / p.C
+        dV = (-self.G_leak * (V - self.E_leak) - I_gap - I_syn + I_ext) / self.C
         phi = self._sigmoid(p.beta * (V - self.V_th))
         ds = p.a_r * phi * (1.0 - s) - p.a_d * s
         return dV, ds
@@ -346,8 +381,8 @@ class NervousSystem:
 
         gs_active = Gs * s[np.newaxis, :]
         # Coefficient of V_i in its own current balance, and everything else.
-        G_tot = p.G_leak + Gg.sum(axis=1) + gs_active.sum(axis=1)
-        drive = (p.G_leak * self.E_leak + Gg @ V
+        G_tot = self.G_leak + Gg.sum(axis=1) + gs_active.sum(axis=1)
+        drive = (self.G_leak * self.E_leak + Gg @ V
                  + (gs_active * self.E_syn).sum(axis=1) + I_ext)
 
         if self.intrinsic:
@@ -363,7 +398,7 @@ class NervousSystem:
 
         G_tot = np.maximum(G_tot, 1e-12)
         V_inf = drive / G_tot
-        tau_V = p.C / G_tot
+        tau_V = self.C / G_tot
         self.V = V_inf + (V - V_inf) * np.exp(-dt / tau_V)
 
         if self.intrinsic:
