@@ -112,6 +112,50 @@ def _wt():
     return ok, f"speed {g['speed']:.3f} mm/s, amplitude {g['amplitude']*100:.1f}% BL"
 
 
+@check("an imposed bend propagates posteriorly, as in the channel experiment",
+       "holding a middle body region at an imposed curvature should bend the "
+       "free region behind it in the same direction and in proportion, with a "
+       "slope near 0.62. This is the experiment the proprioceptive coupling "
+       "was measured with, run against the model",
+       "Wen et al. 2012 Neuron 76:750 Fig 4C: posterior curvature rises "
+       "linearly with imposed anterior curvature, slope 0.62 +/- 0.03; the "
+       "channel's posterior limit sits at body position 0.7",
+       xfail="the model propagates the bend in the right direction and "
+             "linearly, but at slope 0.135 against 0.62, and raising the "
+             "stretch gain does not help: at gain 30 the B-type neurons are "
+             "already saturated, DB at activation 1.000 and VB at 0.000, while "
+             "the muscle depolarises only about 3 mV and produces a force "
+             "difference of 0.07. The bottleneck is downstream of the neurons, "
+             "at the muscle: graded neuromuscular input alone moves a 1 GOhm "
+             "cell a few mV, where the animal answers a ~68 pA postsynaptic "
+             "current with an all-or-none calcium action potential of 45-53 mV "
+             "(Gao & Zhen 2011). Without that regenerative step there is no "
+             "force to propagate with, so this closes when the muscle can "
+             "spike, not by retuning the coupling")
+def _bend_propagation():
+    from .body import N_SEG
+    from .simulation import SimConfig
+    clamp = slice(int(0.35 * N_SEG), int(0.70 * N_SEG))
+    free = slice(int(0.75 * N_SEG), int(0.95 * N_SEG))
+    xs, ys = [], []
+    for k in (-8.0, -4.0, 4.0, 8.0):
+        s = WormSimulation(config=SimConfig(seed=0, emergent_muscles=True,
+                                            propr_gain=30.0))
+        n = int(10.0 / s.cfg.dt)
+        got = []
+        for i in range(n):
+            s.body.curvature[clamp] = k       # the microfluidic channel
+            s.step()
+            s.body.curvature[clamp] = k
+            if i > n * 0.6:
+                got.append(float(s.body.curvature[free].mean()))
+        xs.append(k)
+        ys.append(float(np.mean(got)))
+    slope = float(np.polyfit(xs, ys, 1)[0])
+    return abs(slope - 0.62) <= 0.15, \
+        f"posterior follows imposed curvature with slope {slope:.3f} (want 0.62)"
+
+
 @check("the animal locomotes on connectome drive alone",
        "with the body driven by the muscle cells the connectome actually "
        "drives, rather than by the scripted oscillator, the animal should "

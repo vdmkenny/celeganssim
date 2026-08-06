@@ -32,6 +32,20 @@ HEAD_VENTRAL = ["SMDVL", "SMDVR", "RMDVL", "RMDVR"]
 # that is where it produces no force.
 MUSCLE_REST_ACTIVATION = 0.5
 
+# Proprioceptive coupling length, as a fraction of body length. Motor activity
+# in a posterior region requires the active bending of an anterior region
+# extending ~200 um, measured on a ~1 mm adult in a microfluidic channel that
+# clamps the curvature of a middle segment (Wen et al. 2012 Neuron 76:750
+# Fig 3D). Held as a fraction rather than an absolute length so a larva keeps
+# the same body-relative reach.
+#
+# The kernel shape is NOT measured. Only three channel lengths were tested,
+# 100 um (no effect), 200 and 300 um (both reduced posterior bending), which
+# brackets the reach without saying whether sensitivity falls off as a step,
+# an exponential or a ramp. A uniform window over the reach is the least
+# committed reading of that bracket.
+PROPRIO_LENGTH_BL = 0.2
+
 
 @dataclass
 class SimConfig:
@@ -67,6 +81,11 @@ class SimConfig:
     # this mode barely moves until proprioceptive feedback closes the loop.
     # See docs/emergent-cpg.md and the "network drives the muscles" check.
     emergent_muscles: bool = False
+    # Strength of the proprioceptive current, pA per unit normalised curvature.
+    # A free parameter: no stretch-evoked current has ever been recorded in a
+    # B-type motor neuron, so there is no measured amplitude, reversal
+    # potential, threshold or adaptation to anchor it. Off by default.
+    propr_gain: float = 0.0
     start_adult: bool = True      # False starts as a freshly hatched L1
     # How many seconds of development pass per second of simulated behaviour.
     # Real development takes ~50 h, which nobody wants to watch in real time.
@@ -91,6 +110,7 @@ PROVENANCE = {
     "command_gain": "tuned",
     "seed": "tuned",
     "emergent_muscles": "scripted",
+    "propr_gain": "tuned",   # no stretch-evoked current ever recorded
     "start_adult": "tuned",
     "life_speedup": "tuned",      # display convenience, not biology
 }
@@ -156,9 +176,71 @@ class WormSimulation:
                          for r in self.row_d]
         self.ca_row_v = [np.array([pos[i] for i in r], dtype=int)
                          for r in self.row_v]
+        self._build_proprioception()
 
         self.state = SimState()
         self.reset()
+
+    def _build_proprioception(self) -> None:
+        """Wire each B-type motor neuron to the curvature just anterior to it.
+
+        B-type motor neurons sense the bending of the region in front of them,
+        which is what carries the undulatory wave from head to tail: clamping a
+        middle segment straight abolishes bending behind it while the region in
+        front keeps undulating, and imposing a curvature on that segment sets
+        the sign and size of the curvature behind it (Wen et al. 2012).
+
+        Direction is anterior to posterior and is established independently by
+        vab-7 mutants, in which DB axons project forwards instead of backwards
+        and dorsal bends fail to propagate posteriorly while ventral
+        propagation through VB is unaffected.
+        """
+        reach = PROPRIO_LENGTH_BL * N_SEG
+        self._propr_idx: list[int] = []
+        self._propr_sign: list[float] = []
+        self._propr_w: list[np.ndarray] = []
+        seg_mid = np.arange(N_SEG) + 0.5
+        for cls, sign in (("DB", +1.0), ("VB", -1.0)):
+            names = [n for n in self.conn.names
+                     if self.conn.cell_info[n].get("vnc_class") == cls]
+            if not names:
+                continue
+            order = sorted(names,
+                           key=lambda n: self.conn.cell_info[n]["vnc_index"])
+            for k, name in enumerate(order):
+                # Spread the class evenly along the body: the cords carry no
+                # measured per-cell coordinate, only an anterior-posterior
+                # ordering, which this preserves without claiming positions.
+                here = (k + 0.5) / len(order) * N_SEG
+                w = ((seg_mid < here) & (seg_mid >= here - reach)).astype(float)
+                if w.sum() == 0:
+                    continue
+                self._propr_idx.append(self.conn.idx(name))
+                self._propr_sign.append(sign)
+                self._propr_w.append(w / w.sum())
+        self._propr_idx = np.array(self._propr_idx, dtype=int)
+        self._propr_sign = np.array(self._propr_sign)
+        self._propr_w = (np.array(self._propr_w) if len(self._propr_w)
+                         else np.zeros((0, N_SEG)))
+
+    def proprioceptive_current(self) -> np.ndarray:
+        """Current into each cell from the curvature anterior to it, pA.
+
+        Positive curvature is dorsal bending, so it excites the dorsal B-class
+        and inhibits the ventral one, which is what makes a bend reproduce
+        itself further back. The gain is a free parameter: no stretch-evoked
+        current has ever been recorded in a B-type motor neuron, so there is no
+        measured amplitude, reversal potential or threshold to anchor it.
+        """
+        I = np.zeros(self.conn.n)
+        if not self._propr_idx.size or self.cfg.propr_gain == 0.0:
+            return I
+        # Curvature is per mm, so a larva at the same shape reads a larger
+        # value; normalising by body length makes the signal shape-based.
+        kappa = self.body.curvature * self.body.body_length
+        sensed = self._propr_w @ kappa
+        I[self._propr_idx] = self.cfg.propr_gain * self._propr_sign * sensed
+        return I
 
     def _muscle_rows(self) -> None:
         """Group the 95 body-wall muscles into dorsal/ventral body segments.
@@ -293,6 +375,7 @@ class WormSimulation:
 
         I = self.sensory.compute(self.env, head, tail, dt,
                                  amplitude=cfg.sensory_amplitude)
+        I = I + self.proprioceptive_current()
         sub_dt = (dt * 1000.0) / cfg.neural_substeps  # ms
         for _ in range(cfg.neural_substeps):
             self.ns.step(sub_dt, I, noise=cfg.neural_noise)

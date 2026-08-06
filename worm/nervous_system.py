@@ -459,7 +459,7 @@ class NervousSystem:
         """Normalised 0..1 drive of each cell relative to its own threshold."""
         v = self.V if idx is None else self.V[idx]
         th = self.V_th if idx is None else self.V_th[idx]
-        return 1.0 / (1.0 + np.exp(-self.p.beta * (v - th)))
+        return self._sigmoid(self.p.beta * (v - th))
 
     def muscle_calcium(self) -> np.ndarray:
         """Calcium of each body-wall muscle, in the order of self._muscle_idx.

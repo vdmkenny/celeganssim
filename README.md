@@ -31,7 +31,7 @@ processed files.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 33 checks against published measurements, in parallel
+worm validate         # 34 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -196,7 +196,7 @@ measured by patch clamp.
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 33 checks: 23 behavioural, 10 consistency, gaps as expected failures |
+| `worm/validate.py` | 34 checks: 24 behavioural, 10 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry with provenance tags |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -224,9 +224,9 @@ rather than making it, so are not modelled as GABAergic.
 
 ## Validation
 
-`worm validate` runs 33 checks against published measurements: 23 behavioural
+`worm validate` runs 34 checks against published measurements: 24 behavioural
 (the animal is run and measured) and 10 consistency checks (parameter and data
-invariants). 27 pass. Six are registered expected failures, each naming the
+invariants). 27 pass. Seven are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
@@ -290,6 +290,14 @@ potentials, developmental timings, body sizes, brood size, lifespan.
   power ratio of 8 where a clean rhythm is orders of magnitude. Motor neurons
   sit at their solved resting equilibrium and nothing displaces them.
   `worm validate` carries this as a registered expected failure.
+- **Body-wall muscle does not spike.** The animal answers a ~68 pA
+  postsynaptic current with an all-or-none calcium action potential of 45 to
+  53 mV, and those spikes are what drive contraction (Gao & Zhen 2011). Muscle
+  here is a passive integrator, so graded neuromuscular input moves a 1 GOhm
+  cell only a few millivolts. This is the reason an imposed bend propagates at
+  slope 0.135 rather than the measured 0.62: the proprioceptive coupling is
+  wired and saturating its motor neurons, but there is no regenerative step to
+  turn that into force.
   [docs/emergent-cpg.md](docs/emergent-cpg.md) sets out what an emergent version
   requires. No published model produces C. elegans locomotion emergently from
   the connectome.
