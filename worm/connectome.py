@@ -47,6 +47,17 @@ DEFAULT_POLARITY = +0.5  # unknown transmitter: weak excitation
 # muscle drive as low-confidence relative to the ventral cord (35%) and nerve
 # ring (33%) contributions, which are EM-reconstructed.
 #
+# The gap falls exactly where locomotion can least afford it. Cook et al.
+# report "a gap still remains in a region of the posterior body where there
+# are no high-power EM series from either sex", and that gaps leaving cells
+# without innervation "precisely line up with the unreconstructed region and
+# thus are unquestionably artefactual". It shows here as a gradient: muscles
+# in body rows 17-24 average 6.3 presynaptic partners against 10.0 in the head
+# and 12.8 in the neck, where the published average is about 10 (9.5 dorsal,
+# 10.5 ventral). Sublateral input to posterior muscle is absent altogether.
+# Anything asking this wiring to propagate a wave down the body is asking it
+# to do so through its thinnest region.
+#
 # Muscle-muscle gap junctions are also incomplete here: the edgelist carries a
 # nearest-neighbour chain within each quadrant and only one cross-quadrant
 # pair, whereas White describes left/right coupling through the muscle arms at

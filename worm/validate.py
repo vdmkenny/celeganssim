@@ -170,8 +170,15 @@ def _bend_propagation():
              "anterior, and the last eight segments are motionless. That "
              "follows from the propagation slope of 0.364 per coupling length, "
              "since 0.364 compounded over the five coupling lengths in a body "
-             "leaves 0.006. Wavelength and direction are reported from the "
-             "anterior segments that do move and should not be read as a gait")
+             "leaves 0.006. Part of the cause is the dataset rather than the "
+             "model: posterior body muscles carry 2.5 nS of achievable "
+             "cholinergic conductance against the 2.41 nS needed to reach "
+             "spike threshold, so they can only just cross it with every input "
+             "recruited at once, and they average 6.3 presynaptic partners "
+             "against a published ~10 because the posterior body is where the "
+             "reconstruction has its gap. Wavelength and direction are "
+             "reported from the anterior segments that do move and should not "
+             "be read as a gait")
 def _head_wave():
     from .kinematics import analyse, record
     from .simulation import SimConfig
@@ -240,6 +247,43 @@ def _activation_phase():
     return 30.0 <= phase <= 65.0, \
         (f"activation leads curvature by {phase:+.1f} deg (want ~45) at "
          f"{got['undulation_hz']:.2f} Hz")
+
+
+@check("posterior muscle innervation is thinner than the animal's",
+       "each body-wall muscle receives chemical input from about 10 neurons. "
+       "This check records how far the posterior body falls below that in the "
+       "dataset, because it is the region the undulatory wave has to travel "
+       "through and the region the reconstruction is thinnest in",
+       "Cook et al. 2019 Nature 571:63: 9.5 neurons per dorsal muscle (range "
+       "5-12.5) and 10.5 per ventral (range 4-18.5). The same paper reports "
+       "'a gap still remains in a region of the posterior body where there are "
+       "no high-power EM series from either sex', and that gaps leaving cells "
+       "without innervation 'precisely line up with the unreconstructed region "
+       "and thus are unquestionably artefactual'",
+       section="consistency",
+       xfail="posterior body muscles average 6.3 presynaptic partners against "
+             "the ~10 reported, a 37% deficit, while head and neck sit at 10.0 "
+             "and 12.8. Sublateral input to posterior muscle is absent "
+             "entirely. This is a limit of the available reconstruction rather "
+             "than of the model: the authors call the gaps artefactual, and "
+             "45% of neuron-muscle edges are neuromuscular junctions, half of "
+             "them involving sublateral motor neurons whose connectivity was "
+             "extrapolated rather than traced. No wiring-derived model can "
+             "propagate a wave through a region the wiring is missing from")
+def _posterior_innervation():
+    from .connectome import Connectome
+    c = Connectome.load()
+    mus = [n for n in c.names if c.cell_info[n]["kind"] == "muscle"]
+    mx = max(c.cell_info[n]["row"] for n in mus)
+    got = {}
+    for label, lo, hi in (("head", 1, 8), ("neck", 9, 16), ("body", 17, mx)):
+        k = [int((c.Gs[c.idx(n)] > 0).sum()) for n in mus
+             if lo <= c.cell_info[n]["row"] <= hi]
+        got[label] = float(np.mean(k)) if k else 0.0
+    ok = got["body"] >= 8.0
+    return ok, ("presynaptic partners per muscle: "
+                + ", ".join(f"{k} {v:.1f}" for k, v in got.items())
+                + " (published ~10)")
 
 
 @check("every parameter carries provenance, and measured ones cite a source",

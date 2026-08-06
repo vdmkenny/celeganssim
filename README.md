@@ -31,7 +31,7 @@ processed files.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 36 checks against published measurements, in parallel
+worm validate         # 37 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -209,7 +209,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 36 checks: 25 behavioural, 11 consistency, gaps as expected failures |
+| `worm/validate.py` | 37 checks: 25 behavioural, 12 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry, provenance tags enforced by a check |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -237,9 +237,9 @@ rather than making it, so are not modelled as GABAergic.
 
 ## Validation
 
-`worm validate` runs 36 checks against published measurements: 25 behavioural
-(the animal is run and measured) and 11 consistency checks (parameter and data
-invariants). 28 pass. Eight are registered expected failures, each naming the
+`worm validate` runs 37 checks against published measurements: 25 behavioural
+(the animal is run and measured) and 12 consistency checks (parameter and data
+invariants). 28 pass. Nine are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
@@ -343,6 +343,16 @@ potentials, developmental timings, body sizes, brood size, lifespan.
   1986). The head is a separate oscillator in the animal, and muscle arms reach
   only the nearest cord, which is the structural reason the body is restricted
   to dorsoventral waves.
+- **The posterior body is the reconstruction's thinnest region, and it is
+  where the wave has to travel.** Muscles in body rows 17 to 24 average 6.3
+  presynaptic partners against about 10 published, while head and neck sit at
+  10.0 and 12.8, and sublateral input to posterior muscle is absent entirely.
+  Cook et al. report a remaining gap "in a region of the posterior body where
+  there are no high-power EM series from either sex", and state that gaps
+  leaving cells without innervation are "unquestionably artefactual". A
+  wiring-derived model cannot propagate a wave through a region the wiring is
+  missing from, so part of the locomotion gap is a limit of the available data
+  rather than of the model.
 - **About 29% of neuromuscular input in the dataset was never
   EM-reconstructed.** The sublateral motor neurons (SMB, SMD, SIA, SIB) were
   recorded by immunofluorescence and sampling rather than serial section, and
