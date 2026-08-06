@@ -220,7 +220,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | Dataset | Source | Contents |
 |---|---|---|
 | Genome annotation | NCBI RefSeq GCF_000002985.6 (WBcel235) | 46,926 genes, 19,983 protein-coding |
-| Connectome | Cook et al. 2019, via OpenWorm ConnectomeToolbox | 448 cells, 7,379 edges |
+| Connectome | Cook et al., corrected July 2020 release, via OpenWorm ConnectomeToolbox | 473 cells, 7,762 edges |
 | Neuron metadata | OpenWorm owmeta | type and transmitter for 302 neurons |
 | Expression | CeNGEN via wormneuroatlas | 128 neuron classes x 13,669 genes |
 | Cell classification | WormAtlas | lineage and anatomical class |
@@ -302,7 +302,13 @@ potentials, developmental timings, body sizes, brood size, lifespan.
   0.003 against the scripted oscillator's 0.599, and a peak-to-median spectral
   power ratio of 8 where a clean rhythm is orders of magnitude. Motor neurons
   sit at their solved resting equilibrium and nothing displaces them.
-  `worm validate` carries this as a registered expected failure.
+  `worm validate` carries this as a registered expected failure. The cause is
+  now known and is structural rather than a matter of tuning or of missing
+  wiring: with each cell's threshold solved to its own resting potential, a
+  synapse spans only s_eq to s_max, so a muscle's driven potential is bounded
+  above by `E_muscle * s_eq/s_max`, which is -13.6 mV against a -10 mV spike
+  threshold. No amount of synaptic conductance, from any connectome, reaches
+  it.
 - **The undulatory wave decays instead of travelling.** With the head driven
   and the rest of the body moved only by its own muscles reading their own
   motor neurons, the head oscillates but posterior bending falls to 0.05 of

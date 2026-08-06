@@ -3,7 +3,8 @@
 Inputs (data/raw/):
   celegans_genome.fna.gz      NCBI WBcel235 assembly (RefSeq GCF_000002985.6)
   celegans_annotation.gff.gz  matching RefSeq annotation
-  herm_full_edgelist.csv      Cook et al. 2019 hermaphrodite connectome
+  cook_2020_adjacency.xlsx    Cook et al. connectome adjacency matrices,
+                              corrected July 2020 (hermaphrodite sheets)
   owmeta_cache.json           OpenWorm curated neuron/muscle metadata
   all_cell_info.csv           WormAtlas cell classifications
 
@@ -18,6 +19,8 @@ import json
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
+
+import xlsx
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "raw"
@@ -229,21 +232,45 @@ SUPPLEMENTARY_NT: dict[str, list[str]] = {
 }
 
 
-def build_connectome(neuron_info: dict, muscle_info: dict) -> tuple[dict, dict]:
-    path = RAW / "herm_full_edgelist.csv"
+def _matrix_edges(path: Path, sheet: str, etype: str) -> list[dict]:
+    """Edges from one adjacency sheet.
+
+    Layout: row 2 holds the postsynaptic column labels, column 2 the
+    presynaptic row labels, and the body is weights. Rows 0 and 1 are the
+    category banner ("PHARYNX", "SENSORY NEURONS", ...), not data.
+
+    The symmetric gap-junction sheet carries each pair in both directions,
+    matching how the previous edgelist listed them, so both are emitted and
+    the consumer fills its matrix directly rather than symmetrising.
+    """
+    grid = xlsx.read_sheet(path, sheet)
+    header = {str(c).strip(): j for j, c in enumerate(grid[2]) if c}
     edges = []
-    cells_seen: set[str] = set()
-    with open(path, newline="") as fh:
-        for row in csv.DictReader(fh):
-            src = row["Source"].strip()
-            tgt = row["Target"].strip()
-            if not src or not tgt:
+    for row in grid[3:]:
+        pre = row[2] if len(row) > 2 else None
+        if not pre:
+            continue
+        pre = str(pre).strip()
+        for post, j in header.items():
+            if j >= len(row):
                 continue
-            weight = float(row["Weight"])
-            etype = row["Type"].strip().lower()
-            edges.append({"pre": src, "post": tgt, "w": weight, "type": etype})
-            cells_seen.add(src)
-            cells_seen.add(tgt)
+            try:
+                w = float(row[j])
+            except (TypeError, ValueError):
+                continue
+            if w > 0:
+                edges.append({"pre": pre, "post": post, "w": w, "type": etype})
+    return edges
+
+
+def build_connectome(neuron_info: dict, muscle_info: dict) -> tuple[dict, dict]:
+    # Cook et al.'s corrected July 2020 release. Weights are the same numbers
+    # as the 2019 edgelist (AVAL-AVAR 18, PVCL->AVBL 7), so nothing calibrated
+    # against contact counts changes, but the posterior body is better covered.
+    path = RAW / "cook_2020_adjacency.xlsx"
+    edges = _matrix_edges(path, "hermaphrodite chemical", "chemical")
+    edges += _matrix_edges(path, "hermaphrodite gap jn symmetric", "electrical")
+    cells_seen: set[str] = {e["pre"] for e in edges} | {e["post"] for e in edges}
 
     # Classify every cell that appears in the wiring diagram.
     wormatlas: dict[str, dict] = {}
