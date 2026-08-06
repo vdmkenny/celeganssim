@@ -31,7 +31,7 @@ processed files.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 34 checks against published measurements, in parallel
+worm validate         # 35 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -209,8 +209,8 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 34 checks: 24 behavioural, 10 consistency, gaps as expected failures |
-| `worm/parameters.py` | audited parameter registry with provenance tags |
+| `worm/validate.py` | 35 checks: 24 behavioural, 11 consistency, gaps as expected failures |
+| `worm/parameters.py` | audited parameter registry, provenance tags enforced by a check |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
 ---
@@ -237,9 +237,9 @@ rather than making it, so are not modelled as GABAergic.
 
 ## Validation
 
-`worm validate` runs 34 checks against published measurements: 24 behavioural
-(the animal is run and measured) and 10 consistency checks (parameter and data
-invariants). 27 pass. Seven are registered expected failures, each naming the
+`worm validate` runs 35 checks against published measurements: 24 behavioural
+(the animal is run and measured) and 11 consistency checks (parameter and data
+invariants). 28 pass. Seven are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium

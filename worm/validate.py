@@ -210,6 +210,61 @@ def _activation_phase():
          f"{got['undulation_hz']:.2f} Hz")
 
 
+@check("every parameter carries provenance, and measured ones cite a source",
+       "each parameter must be tagged from the closed vocabulary, and any "
+       "tagged measured or published must have a citation near where it is "
+       "defined. A number tagged measured with no source is the failure mode "
+       "the registry exists to prevent, since it reads as anchored to the "
+       "animal while being anchored to nothing",
+       "self-audit of worm/parameters.py against the defining modules",
+       section="consistency")
+def _provenance():
+    import re
+    from pathlib import Path
+
+    from . import parameters
+    allowed = {"measured", "published", "assay", "tuned", "scripted"}
+    params = parameters.PARAMETERS
+
+    bad_tag = sorted(p.name for p in params.values()
+                     if p.provenance not in allowed)
+
+    # A citation is a four-digit year in the comment block above the
+    # definition, which is how every source in this codebase is written.
+    src: dict[str, list[str]] = {}
+    uncited, unfound = [], []
+    for p in params.values():
+        if p.provenance not in ("measured", "published"):
+            continue
+        path = Path(p.where)
+        if not path.exists():
+            continue
+        lines = src.setdefault(p.where, path.read_text().splitlines())
+        short = p.name.split(".", 1)[1]
+        pat = re.compile(rf"^\s*{re.escape(short)}\s*[:=]")
+        idx = next((i for i, ln in enumerate(lines) if pat.match(ln)), None)
+        if idx is None:
+            unfound.append(p.name)
+            continue
+        window = "\n".join(lines[max(0, idx - 30):idx + 1])
+        if not re.search(r"\b(19|20)\d{2}\b", window):
+            uncited.append(p.name)
+
+    by_tag: dict[str, int] = {}
+    for p in params.values():
+        by_tag[p.provenance] = by_tag.get(p.provenance, 0) + 1
+    ok = not bad_tag and not uncited and not unfound
+    detail = (", ".join(f"{k} {v}" for k, v in sorted(by_tag.items()))
+              + f"; {len(params)} total")
+    if bad_tag:
+        detail += f"; UNKNOWN TAG: {bad_tag}"
+    if uncited:
+        detail += f"; NO CITATION: {uncited}"
+    if unfound:
+        detail += f"; DEFINITION NOT FOUND: {unfound}"
+    return ok, detail
+
+
 @check("muscle calcium reproduces the measured transient",
        "force follows calcium, so the calcium stage sets when a muscle pulls. "
        "Its impulse response must peak where the measured transient peaks",

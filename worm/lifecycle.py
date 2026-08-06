@@ -78,7 +78,13 @@ LIFESPAN_MIN_D = 2.0
 
 @dataclass
 class LifecycleParams:
+    # Temperature coefficient of development. Byerly, Cassada & Russell 1976
+    # Dev Biol 51:23 timed postembryonic development at 39 h at 25 C against
+    # 75 h at 16 C, so Q10 = (75/39)^(10/9) = 2.07 across that range.
     q10: float = 2.0
+    # Standard cultivation temperature, a convention of the field rather than
+    # a property of the animal (Brenner 1974 Genetics 77:71). Every timing in
+    # this module is quoted at it.
     reference_temp: float = 20.0
     starve_threshold: float = 0.25
     dauer_decision_at: float = 0.75
@@ -99,8 +105,8 @@ class LifecycleParams:
 
 # Provenance tags for the parameter registry (worm/parameters.py).
 PROVENANCE = {
-    "q10": "published",                       # standard Q10 approximation
-    "reference_temp": "measured",
+    "q10": "measured",                        # Byerly et al. 1976, 2.07
+    "reference_temp": "assay",   # lab convention, not a measurement
     "starve_threshold": "tuned",
     "dauer_decision_at": "tuned",             # late L1, Cassada & Russell 1975 timing
     "dauer_pheromone_threshold": "tuned",
