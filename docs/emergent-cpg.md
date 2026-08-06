@@ -69,6 +69,57 @@ target: deleting it must depolarise VA by 25 mV (−71.7 to −46.5) and VB by
 29 mV (−53.2 to −24.0), and must remove 80% of the outward current at +70 mV in
 VA5 and 67% in VB6. SHK-1 belongs only in D class (45% of VD5 current).
 
+## Proprioceptive coupling
+
+Measured in a microfluidic channel that clamps the curvature of a middle body
+region while the rest of the animal moves freely (Wen et al. 2012 Neuron
+76:750).
+
+| Quantity | Value | Where |
+|---|---|---|
+| Coupling length | ~200 µm, about 0.2 body length | Fig 3D |
+| Direction | strictly anterior to posterior | Fig 3, 4A-C, 7C, S3 |
+| Gain, posterior curvature per imposed anterior curvature | 0.62 ± 0.03 | Fig 4C |
+| Curvature-to-curvature delay | ~300 ms, flat from 1 to 100 mPa·s, ~1 s at 300 | Fig 5D, 5E |
+
+The coupling length is a bracket rather than a profile: a 100 µm channel did
+not measurably reduce posterior bending, channels beyond 200 µm did. Only three
+lengths were tested, so whether sensitivity falls off as a step, an exponential
+or a graded kernel is unknown.
+
+Direction is established four independent ways, including `vab-7` mutants, in
+which DB axons project anteriorly instead of posteriorly and dorsal bends fail
+to propagate backward while ventral propagation through VB stays intact.
+
+## Gait adaptation targets
+
+Undulation across external viscosity, continuous with no bistable gait switch,
+measured from 1 to 28,000 mPa·s at Reynolds number below 0.05 (Fang-Yen et al.
+2010 PNAS 107:20323, Table 1).
+
+| Medium | Wavelength | Frequency |
+|---|---|---|
+| Swimming, NGM buffer (1 mPa·s) | 1.54 ± 0.04 L | 1.76 ± 0.07 Hz |
+| Crawling, 2% agarose | 0.65 ± 0.03 L | 0.30 ± 0.02 Hz |
+
+## What has never been measured
+
+These are free parameters in any proprioceptive model, and saying so is part of
+the specification.
+
+- **Latency from curvature to B-type motor neuron potential.** The only measured
+  delay is the ~300 ms curvature-to-curvature loop. The widely quoted ~80 ms
+  per-segment transduction delay is arithmetic on wave speed, including in Wen
+  et al.'s own Equation 1, not a recording.
+- **Any stretch-evoked current in DB or VB.** No whole-cell recording under
+  mechanical stimulation exists: no current amplitude, reversal potential, I-V
+  relation, adaptation kinetics or single-channel conductance. The claim that
+  B-type neurons are proprioceptors rests on behaviour and calcium imaging.
+- **Threshold curvature.** Wen et al. Fig 4C is linear across the tested range
+  with no reported intercept. The thresholds in circulation (Ji et al. 2021
+  eLife 10:e69905 P_th = 2.33; Denham et al. 2018) are fitted parameters of
+  head-oscillator models in dimensionless units.
+
 ## Constraints worth knowing
 
 **There is no measured cellular waveform for the gait.** The VA5 upstate lasts
