@@ -156,6 +156,38 @@ def _bend_propagation():
         f"posterior follows imposed curvature with slope {slope:.3f} (want 0.62)"
 
 
+@check("an imposed head rhythm travels the length of the body",
+       "with the head driven and everything behind it moved only by its own "
+       "muscles reading their own motor neurons, the undulation should reach "
+       "the tail at roughly the amplitude it has at the head, and settle to a "
+       "wavelength near 0.62 body lengths travelling forward. Nothing sets "
+       "that wavelength here, so it is a property of the neuromechanical loop "
+       "rather than a number written down",
+       "Wen et al. 2012 Neuron 76:750 (head oscillator, proprioceptive "
+       "propagation); Cronin et al. 2005 Genetics (0.62 BL wavelength)",
+       xfail="the head oscillates and drives the anterior third, but the wave "
+             "decays instead of travelling: posterior bending is 0.05 of "
+             "anterior, and the last eight segments are motionless. That "
+             "follows from the propagation slope of 0.364 per coupling length, "
+             "since 0.364 compounded over the five coupling lengths in a body "
+             "leaves 0.006. Wavelength and direction are reported from the "
+             "anterior segments that do move and should not be read as a gait")
+def _head_wave():
+    from .kinematics import analyse, record
+    from .simulation import SimConfig
+    s = WormSimulation(config=SimConfig(seed=0, emergent_muscles=True,
+                                        propr_gain=30.0,
+                                        head_pacemaker_pa=150.0))
+    r = analyse(record(s, seconds=40.0, settle=15.0))
+    reach = r["posterior_fraction"]
+    ok = (reach > 0.5 and r["wave_direction"] == "forward"
+          and abs(r["wavelength_bl"] - 0.62) <= 0.2)
+    return ok, (f"posterior bending {reach:.3f} of anterior "
+                f"({r['live_segments']} of 24 segments moving), "
+                f"{r['wave_direction']} at {r['wavelength_bl']:.2f} BL, "
+                f"{r['undulation_hz']:.2f} Hz")
+
+
 @check("the animal locomotes on connectome drive alone",
        "with the body driven by the muscle cells the connectome actually "
        "drives, rather than by the scripted oscillator, the animal should "

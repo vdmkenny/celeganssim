@@ -38,6 +38,12 @@ REF_SEG = N_SEG // 2
 # last segment where the taper makes curvature noisy.
 FIT_SEGMENTS = slice(6, N_SEG - 1)
 
+# A segment counts as oscillating if its curvature varies by at least this
+# fraction of the most active segment's. Below it the phase is noise.
+AMPLITUDE_FLOOR = 0.15
+# Fewer live segments than this cannot support a wavelength fit.
+MIN_FIT_SEGMENTS = 5
+
 
 @dataclass
 class GaitRecording:
@@ -164,13 +170,24 @@ def analyse(rec: GaitRecording) -> dict:
     # Wavelength from the phase gradient along the body: radians per segment,
     # fitted across segments so no single noisy segment sets the answer.
     max_lag = int(min(n_t // 3, (1.5 / freq / rec.dt) if freq > 0 else n_t // 3))
-    segs = np.arange(n_seg)[FIT_SEGMENTS]
     slope = float("nan")
     wavelength_bl = float("nan")
     direction = "none"
-    if np.isfinite(freq) and freq > 0:
+    # Only fit segments that are actually oscillating. A phase is meaningless
+    # where there is no signal, and a decaying wave leaves the posterior body
+    # silent: fitting through it returns a confident direction and wavelength
+    # read out of noise.
+    seg_amp = kap.std(axis=0)
+    alive = seg_amp >= AMPLITUDE_FLOOR * seg_amp.max() if seg_amp.max() > 0 \
+        else np.zeros(n_seg, dtype=bool)
+    fit_mask = np.zeros(n_seg, dtype=bool)
+    fit_mask[FIT_SEGMENTS] = True
+    fit_mask &= alive
+    segs = np.arange(n_seg)[fit_mask]
+
+    if np.isfinite(freq) and freq > 0 and segs.size >= MIN_FIT_SEGMENTS:
         ph = segment_phases(kap, rec.dt, freq)
-        slope = float(np.polyfit(segs, ph[FIT_SEGMENTS], 1)[0])  # rad/segment
+        slope = float(np.polyfit(segs, ph[fit_mask], 1)[0])  # rad/segment
         if abs(slope) > 1e-9:
             wavelength_bl = (2.0 * np.pi / abs(slope)) / n_seg
             # Posterior segments lag anterior ones in a forward wave, which is
@@ -208,6 +225,13 @@ def analyse(rec: GaitRecording) -> dict:
         "phase_rad_per_segment": slope,
         "phase_drive_to_curvature_deg": phase_deg,
         "curvature_amplitude": float(np.mean(np.abs(kap).max(axis=1))),
+        # How far back the undulation actually reaches: the ratio of posterior
+        # to anterior bending. A travelling wave holds this near 1; a wave that
+        # dies out behind the head drives it to 0.
+        "posterior_fraction": float(
+            seg_amp[int(0.7 * n_seg):].mean()
+            / max(seg_amp[:int(0.4 * n_seg)].mean(), 1e-12)),
+        "live_segments": int(alive.sum()),
         "bend_amplitude_bl": amp,
         "duration_s": rec.duration,
     }

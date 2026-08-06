@@ -31,7 +31,7 @@ processed files.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 35 checks against published measurements, in parallel
+worm validate         # 36 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -209,7 +209,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 35 checks: 24 behavioural, 11 consistency, gaps as expected failures |
+| `worm/validate.py` | 36 checks: 25 behavioural, 11 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry, provenance tags enforced by a check |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -237,9 +237,9 @@ rather than making it, so are not modelled as GABAergic.
 
 ## Validation
 
-`worm validate` runs 35 checks against published measurements: 24 behavioural
+`worm validate` runs 36 checks against published measurements: 25 behavioural
 (the animal is run and measured) and 11 consistency checks (parameter and data
-invariants). 28 pass. Seven are registered expected failures, each naming the
+invariants). 28 pass. Eight are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
@@ -303,6 +303,12 @@ potentials, developmental timings, body sizes, brood size, lifespan.
   power ratio of 8 where a clean rhythm is orders of magnitude. Motor neurons
   sit at their solved resting equilibrium and nothing displaces them.
   `worm validate` carries this as a registered expected failure.
+- **The undulatory wave decays instead of travelling.** With the head driven
+  and the rest of the body moved only by its own muscles reading their own
+  motor neurons, the head oscillates but posterior bending falls to 0.05 of
+  anterior and the last eight segments do not move. Propagation measures 0.364
+  per coupling length against a measured 0.62, and 0.364 compounded over the
+  five coupling lengths in a body leaves 0.006.
 - **Muscle spikes are not reached from synaptic input.** Muscle carries the
   measured calcium action potential, but crossing its -10 mV threshold needs
   about 2.4 nS of extra excitatory conductance, close to the 2.26 nS implied
@@ -379,6 +385,8 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 **Locomotion**
 - [Boyle, Berri & Cohen (2012), Front. Comput. Neurosci. 6:10](https://doi.org/10.3389/fncom.2012.00010)
 - [Wen et al. (2012), Neuron 76:750](https://doi.org/10.1016/j.neuron.2012.08.039) (proprioceptive coupling)
+- [Mellem, Brockie, Madsen & Maricq (2008), Nat. Neurosci. 11:865](https://doi.org/10.1038/nn.2131) (RMD plateau potentials, a measured regenerative response in a head motor neuron)
+- [Byerly, Cassada & Russell (1976), Dev. Biol. 51:23](https://doi.org/10.1016/0012-1606(76)90119-6) (development rate versus temperature)
 - [Gao et al. (2018), eLife 7:e29915](https://doi.org/10.7554/eLife.29915) (A-class oscillators)
 - [Kawano et al. (2011), Neuron 72:572](https://doi.org/10.1016/j.neuron.2011.09.005)
 - [Deng et al. (2021), eNeuro 8:ENEURO.0241-20.2020](https://doi.org/10.1523/ENEURO.0241-20.2020)

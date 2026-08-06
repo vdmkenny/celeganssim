@@ -46,6 +46,17 @@ MUSCLE_REST_ACTIVATION = 0.5
 # committed reading of that bracket.
 PROPRIO_LENGTH_BL = 0.2
 
+# Head pacemaker cells. The head is a separate oscillator from the body in this
+# animal: clamping a middle region straight abolishes bending behind it while
+# the region in front keeps undulating (Wen et al. 2012 Neuron 76:750), and the
+# head rhythm survives when the ventral cord is cut (Xu et al. 2018 PNAS
+# 115:E4493). RMD and SMD are the nerve-ring motor neurons innervating head
+# muscle, and RMD is one of the few C. elegans neurons with a measured
+# regenerative response, generating all-or-none plateau potentials (Mellem,
+# Brockie, Madsen & Maricq 2008 Nat Neurosci 11:865).
+HEAD_PACEMAKER_D = ["RMDDL", "RMDDR", "SMDDL", "SMDDR"]
+HEAD_PACEMAKER_V = ["RMDVL", "RMDVR", "SMDVL", "SMDVR"]
+
 
 @dataclass
 class SimConfig:
@@ -86,6 +97,16 @@ class SimConfig:
     # B-type motor neuron, so there is no measured amplitude, reversal
     # potential, threshold or adaptation to anchor it. Off by default.
     propr_gain: float = 0.0
+    # Head pacemaker: an oscillating current in antiphase into the dorsal and
+    # ventral nerve-ring motor neurons. SCRIPTED, and the last scripted piece
+    # of the locomotor rhythm. The head oscillating is measured, and so is its
+    # frequency, but no measured conductance makes these cells oscillate on
+    # their own, so the oscillation is imposed and only its propagation down
+    # the body is left to the network. Amplitude is in pA.
+    head_pacemaker_pa: float = 0.0
+    # 0.47 Hz crawling on agar (Cronin et al. 2005); the animal runs 0.30 Hz on
+    # 2% agarose and 1.76 Hz swimming (Fang-Yen et al. 2010 Table 1).
+    head_pacemaker_hz: float = 0.47
     start_adult: bool = True      # False starts as a freshly hatched L1
     # How many seconds of development pass per second of simulated behaviour.
     # Real development takes ~50 h, which nobody wants to watch in real time.
@@ -111,6 +132,8 @@ PROVENANCE = {
     "seed": "tuned",
     "emergent_muscles": "scripted",
     "propr_gain": "tuned",   # no stretch-evoked current ever recorded
+    "head_pacemaker_pa": "scripted",  # the last imposed piece of the rhythm
+    "head_pacemaker_hz": "measured",  # Cronin et al. 2005; Fang-Yen et al. 2010
     "start_adult": "tuned",
     "life_speedup": "tuned",      # display convenience, not biology
 }
@@ -177,6 +200,8 @@ class WormSimulation:
         self.ca_row_v = [np.array([pos[i] for i in r], dtype=int)
                          for r in self.row_v]
         self._build_proprioception()
+        self.i_head_d = self.conn.indices(HEAD_PACEMAKER_D)
+        self.i_head_v = self.conn.indices(HEAD_PACEMAKER_V)
 
         self.state = SimState()
         self.reset()
@@ -222,6 +247,24 @@ class WormSimulation:
         self._propr_sign = np.array(self._propr_sign)
         self._propr_w = (np.array(self._propr_w) if len(self._propr_w)
                          else np.zeros((0, N_SEG)))
+
+    def head_pacemaker_current(self) -> np.ndarray:
+        """Antiphase oscillating current into the head motor neurons, pA.
+
+        The head oscillator is imposed. What is left to the network is whether
+        that oscillation travels: the body behind the head is driven only by
+        its own muscles reading their own motor neurons, which read curvature
+        in front of them, so the wavelength and wave speed are properties of
+        the neuromechanical loop rather than numbers written down anywhere.
+        """
+        I = np.zeros(self.conn.n)
+        if self.cfg.head_pacemaker_pa == 0.0:
+            return I
+        phase = 2.0 * np.pi * self.cfg.head_pacemaker_hz * self.state.t
+        drive = self.cfg.head_pacemaker_pa * np.sin(phase)
+        I[self.i_head_d] = drive
+        I[self.i_head_v] = -drive
+        return I
 
     def proprioceptive_current(self) -> np.ndarray:
         """Current into each cell from the curvature anterior to it, pA.
@@ -375,7 +418,7 @@ class WormSimulation:
 
         I = self.sensory.compute(self.env, head, tail, dt,
                                  amplitude=cfg.sensory_amplitude)
-        I = I + self.proprioceptive_current()
+        I = I + self.proprioceptive_current() + self.head_pacemaker_current()
         sub_dt = (dt * 1000.0) / cfg.neural_substeps  # ms
         for _ in range(cfg.neural_substeps):
             self.ns.step(sub_dt, I, noise=cfg.neural_noise)
