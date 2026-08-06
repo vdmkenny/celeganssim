@@ -290,6 +290,45 @@ def _posterior_innervation():
                 + " (published ~10)")
 
 
+@check("leak reversals stay inside the range an ion could supply",
+       "E_leak is a battery made of real ionic gradients, so it cannot sit "
+       "below the potassium equilibrium (about -80 mV) or above the sodium "
+       "one. A solver that drives it past those is not describing a cell",
+       "Gao & Zhen 2011 PNAS 108:2557 (muscle E_Cl about -30 mV, E_K about "
+       "-80 mV); Liu, Chen & Wang 2014 Nat Commun 5:5155 (motor neuron "
+       "resting potentials); Liu, Hollopeter & Jorgensen 2009 PNAS 106:10823 "
+       "(motor neurons release tonically at rest, so tonic synaptic "
+       "conductance is real and has to be accounted for, not cancelled)",
+       section="consistency",
+       xfail="calibrate_rest solves E_leak to put each measured cell at its "
+             "measured resting potential, with no bound on the answer. For "
+             "muscle it returns a median of -135 mV and a minimum of -402 mV, "
+             "because tonic synaptic conductance is 5.38 nS against a 1 nS "
+             "leak, 83% of the cell's resting conductance, all of it pulling "
+             "toward 0 mV. Holding -25 mV against that needs a battery no ion "
+             "provides. It is also what caps the muscle: with rest pinned by "
+             "an ever more negative leak, the driven potential is bounded by "
+             "E_muscle * s_eq/s_max = -13.6 mV and cannot reach the -10 mV "
+             "spike threshold. The measured whole-cell input resistance is "
+             "1 GOhm, so the tonic conductance should be a fraction of the "
+             "leak rather than five times it, which points at the release "
+             "variable resting at 54.5% of its maximum")
+def _leak_bounds():
+    from .connectome import Connectome
+    from .genome import Genome
+    from .nervous_system import NervousSystem
+    c = Connectome.load()
+    ns = NervousSystem(c, Genome.load())
+    m = c.is_muscle
+    lo, hi = -85.0, 60.0          # E_K to E_Na, generously
+    bad = int(((ns.E_leak < lo) | (ns.E_leak > hi)).sum())
+    return bad == 0, (
+        f"{bad} of {ns.n} cells outside {lo:.0f}..{hi:.0f} mV; "
+        f"muscle median {float(np.median(ns.E_leak[m])):.0f} mV "
+        f"(min {ns.E_leak[m].min():.0f}), "
+        f"neuron median {float(np.median(ns.E_leak[~m])):.0f} mV")
+
+
 @check("every parameter carries provenance, and measured ones cite a source",
        "each parameter must be tagged from the closed vocabulary, and any "
        "tagged measured or published must have a citation near where it is "

@@ -31,7 +31,7 @@ processed files.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 37 checks against published measurements, in parallel
+worm validate         # 38 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -209,7 +209,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 37 checks: 25 behavioural, 12 consistency, gaps as expected failures |
+| `worm/validate.py` | 38 checks: 25 behavioural, 13 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry, provenance tags enforced by a check |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
