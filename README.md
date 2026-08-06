@@ -31,7 +31,7 @@ processed files.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 27 checks against published measurements, in parallel
+worm validate         # 30 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -163,24 +163,19 @@ gap-junction contact, since measured coupling is reported whole-cell across all
 contacts a pair shares. Leak reversals are solved so the network equilibrium
 lands on measured resting potentials.
 
-The 95 body-wall muscles are cells in the same network, and they are not
-neurons. Measured against a neuron they rest 40 mV depolarised (-25 mV against
--65), are about 47x larger (70 pF against 1.5) and integrate about 12x slower
-(70 ms against 6), so they carry their own measured passive properties rather
-than inheriting the neuronal ones. The depolarised rest is attributed to a high
-chloride permeability rather than a potassium equilibrium, which is why it
-cannot be recovered from a neuronal leak.
+The 95 body-wall muscles are cells in the same network and carry their own
+measured passive properties: they rest at -25 mV against a neuron's -65 mV,
+have a capacitance of 70 pF against 1.5 pF, and a membrane time constant of
+70 ms against 6 ms. The depolarised rest reflects a high chloride permeability
+rather than a potassium equilibrium.
 
-The neuromuscular junction is measured rather than assumed. Acetylcholine acts
-on a non-selective cation channel reversing near 0 mV, and GABA on the
-chloride-permeant UNC-49 receptor, whose reversal is about -30 mV against a
--25 mV resting potential: at the junction GABA is only 5 mV of hyperpolarising
-drive and works mainly by shunting, so it does not take the neuronal -48 mV.
-The strength is a check on the model rather than a free parameter. Multiplying
-the connectome's contact counts by the generic per-contact conductance gives
-5.0 nS of cholinergic conductance per muscle, against 8.5 nS measured by
-patch clamp, so the wiring weights land within a factor of two of the junction
-without being fitted to it.
+At the neuromuscular junction, acetylcholine acts on a non-selective cation
+channel reversing near 0 mV and GABA on the chloride-permeant UNC-49 receptor
+reversing near -30 mV, so against a -25 mV resting potential GABA contributes
+5 mV of hyperpolarising drive and acts largely by shunting. Synaptic strength
+follows from the wiring: connectome contact counts times the per-contact
+conductance give 5.0 nS of cholinergic conductance per muscle, against 8.5 nS
+measured by patch clamp.
 
 | Module | Role |
 |---|---|
@@ -192,7 +187,7 @@ without being fitted to it.
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 27 checks: 22 behavioural, 5 consistency, gaps as expected failures |
+| `worm/validate.py` | 30 checks: 21 behavioural, 9 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry with provenance tags |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -220,22 +215,23 @@ rather than making it, so are not modelled as GABAergic.
 
 ## Validation
 
-`worm validate` runs 27 checks against published measurements: 20 behavioural
-(the animal is run and measured) and 7 consistency checks (parameter and data
-invariants). 24 pass. The 3 failures are known gaps, reported as expected
-failures and tracked, not hidden: without spontaneous reversals there are no
-pirouettes, so chemotaxis cannot yet discriminate salt-blind mutants
-([issue #6](https://github.com/vdmkenny/celeganssim/issues/6)); the
-fixed-frequency oscillator cannot adapt gait to the medium, and cannot turn
-`goa-1`'s deeper bends into speed
-([issue #10](https://github.com/vdmkenny/celeganssim/issues/10)). When those
-issues are fixed, the checks flip from XFAIL to PASS and the suite will say so.
+`worm validate` runs 30 checks against published measurements: 21 behavioural
+(the animal is run and measured) and 9 consistency checks (parameter and data
+invariants). 26 pass. Four are registered expected failures, each naming the
+gap it tracks. The connectome does not generate the locomotor rhythm, so real
+muscle drive carries no undulation, and the fixed-frequency oscillator cannot
+adapt gait to the medium
+([issue #10](https://github.com/vdmkenny/celeganssim/issues/10)). Without
+spontaneous reversals there are no pirouettes, so chemotaxis cannot
+discriminate salt-blind mutants, and `goa-1` loses to constant reversing the
+speed its deeper, faster bends would otherwise gain
+([issue #6](https://github.com/vdmkenny/celeganssim/issues/6)).
 
 | Check | Model | Published |
 |---|---|---|
 | Input resistance | 4.0 GOhm | 1.6 to 8 GOhm |
 | Membrane time constant | 6.0 ms | 3 to 10 ms |
-| AVAL-AVAR gap coupling | 90 pS (1.6x high) | 56 pS |
+| AVAL-AVAR gap coupling | 54 pS | 56 pS |
 | VA5 / VB6 resting potential | -71.7 / -53.2 mV | -71.7 / -53.2 mV |
 | Crawling speed | 0.239 mm/s | 0.20 +/- 0.04 mm/s |
 | Undulation amplitude | 21.2% body length | 19.3% |
@@ -274,14 +270,12 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 
 - **The locomotor rhythm is imposed, not emergent.** The network sets its
   amplitude, direction and frequency, but the oscillation itself is modelled.
-  The size of that gap is measured rather than asserted: reading the real
-  neuromuscular output, the dorsoventral difference in muscle activation has a
-  standard deviation of 0.003 against the scripted oscillator's 0.599, and a
-  peak-to-median spectral power ratio of 8 where a clean rhythm is orders of
-  magnitude. The connectome as wired delivers no undulatory rhythm to the
-  muscles at all, because motor neurons sit at their solved resting equilibrium
-  and nothing displaces them. `worm validate` carries this as a registered
-  expected failure, so progress against it is visible.
+  The connectome as wired delivers no undulatory rhythm to the muscles: the
+  dorsoventral difference in real muscle activation has a standard deviation of
+  0.003 against the scripted oscillator's 0.599, and a peak-to-median spectral
+  power ratio of 8 where a clean rhythm is orders of magnitude. Motor neurons
+  sit at their solved resting equilibrium and nothing displaces them.
+  `worm validate` carries this as a registered expected failure.
   [docs/emergent-cpg.md](docs/emergent-cpg.md) sets out what an emergent version
   requires. No published model produces C. elegans locomotion emergently from
   the connectome.
