@@ -331,7 +331,12 @@ potentials, developmental timings, body sizes, brood size, lifespan.
   The receptor table itself is derived from the RefSeq product descriptions
   (`scripts/build_receptors.py`). Where expression cannot decide (metabotropic
   transmitters, cells outside CeNGEN, ties), a transmitter-level heuristic is
-  the tagged fallback.
+  the tagged fallback. A small table of documented exceptions overrides both
+  where behaviour settles a sign that expression cannot: PLM onto the backward
+  command interneurons is inhibitory, since tail touch drives forward escape
+  and PLM ablation abolishes it, and acetylcholine gates chloride through the
+  ACC and LGC families that CeNGEN does not resolve in those cells. Overrides
+  are counted separately in the sign provenance.
 - **The genome sequence is not load-bearing.** The annotation drives gene lookup
   and knockouts, but the 100 Mb of sequence yields chromosome lengths and GC
   content. Mapping a gene to what its loss *does* is a curated table.

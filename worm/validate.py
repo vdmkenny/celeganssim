@@ -469,21 +469,7 @@ def _ant():
 
 @check("posterior touch does not reverse",
        "posterior touch accelerates forward instead of reversing",
-       "Chalfie et al. 1985: PLM gap-junctions to the forward command neuron PVC",
-       xfail="broken by the switch to Cook's corrected July 2020 release. In "
-             "that wiring PLM makes 14 to 21 chemical synapses onto the "
-             "backward command neurons AVA and AVD and none onto the forward "
-             "pair, while ALM and AVM favour forward (ALML 6 backward against "
-             "15 forward, AVM 2 against 49). PLM is cholinergic and this "
-             "model derives synapse sign from postsynaptic receptor "
-             "expression, so that output comes out excitatory and posterior "
-             "touch drives reversal. Chalfie et al. 1985 have tail touch "
-             "driving forward escape, so the model is wrong here. Peak "
-             "command deviation is now 0.0049 for posterior against 0.0063 "
-             "for anterior, a 1.28x separation that no single threshold can "
-             "split without also silencing the mec-10 partial response at "
-             "0.0033. Needs the PLM-to-AVA sign resolved, not a threshold "
-             "tweak")
+       "Chalfie et al. 1985: PLM gap-junctions to the forward command neuron PVC")
 def _post():
     r = touch_response("posterior")
     base = gait(seconds=6.0, settle=10.0)["speed"]
@@ -525,12 +511,7 @@ def _fields():
 @check("mid-body touch is the ambiguous zone",
        "a mid-body stroke lands where the anterior and posterior fields meet, "
        "so it does not reliably drive a reversal the way a head stroke does",
-       "Chalfie et al. 1985: ALM and PLM processes overlap around mid-body",
-       xfail="same cause as the posterior-touch check: in the corrected 2020 "
-             "wiring PLM's chemical output onto AVA and AVD is excitatory "
-             "under receptor-derived signs, so every body position now clears "
-             "the reversal threshold and the mid-body ambiguity disappears. "
-             "Head, mid-body and tail all reverse 3 of 3")
+       "Chalfie et al. 1985: ALM and PLM processes overlap around mid-body")
 def _midbody():
     head = sum(touch_response("anterior", seed=s)["reversed"] for s in range(3))
     mid = sum(touch_response("midbody", seed=s)["reversed"] for s in range(3))

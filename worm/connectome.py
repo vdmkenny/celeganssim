@@ -107,6 +107,40 @@ E_INH = -48.0   # inhibitory synaptic reversal potential, mV
 # would overstate GABAergic drive on muscle by about 4.6x at rest.
 E_INH_MUSCLE = -30.0   # muscle chloride reversal potential, mV
 
+# Documented sign exceptions, applied after the receptor-expression pass.
+#
+# The touch circuit's polarities were never characterised biochemically and
+# were inferred from behaviour instead: Wicks, Roehrig & Rankin 1996 J
+# Neurosci 16:4017, whose graded-potential formulation this model already
+# uses, fitted the tap-withdrawal circuit's excitatory and inhibitory
+# assignment against ablation phenotypes precisely because the signs were
+# unknown.
+#
+# PLM onto the backward command interneurons is the case that matters here.
+# Tail touch drives forward escape and PLM ablation abolishes it (Chalfie et
+# al. 1985 J Neurosci 5:956), so PLM cannot be exciting the reversal drivers.
+# In the corrected 2020 wiring PLM makes 14 to 21 chemical synapses onto AVA
+# and AVD and none onto the forward pair, which read as excitatory make tail
+# touch reverse.
+#
+# Receptor expression cannot settle it. Acetylcholine is not uniformly
+# excitatory in this animal, gating chloride through the ACC and LGC families
+# just as glutamate does through the glutamate-gated chloride channels, but
+# CeNGEN reports no ACC expression in AVA, AVD or AVE and lgc-46, lgc-47 and
+# lgc-49 are absent from the expression cache altogether. So this is a
+# behavioural inference and is counted separately in sign_provenance rather
+# than being passed off as measured.
+SIGN_OVERRIDES: dict[tuple[str, str], str] = {
+    ("PLM", "AVA"): "inhibitory",
+    ("PLM", "AVD"): "inhibitory",
+    ("PLM", "AVE"): "inhibitory",
+}
+
+
+def _cell_class(name: str) -> str:
+    """Class prefix of a cell name: PLML -> PLM, AVAR -> AVA."""
+    return name[:-1] if name[-1] in "LR" and len(name) > 3 else name
+
 
 class Connectome:
     def __init__(self, cells: dict, edges: list[dict]) -> None:
@@ -247,6 +281,16 @@ class Connectome:
             if (before == e_inh) != (exc < inh):
                 self.sign_flips.append((self.names[i], post, before,
                                         float(self.E_syn[j, i])))
+
+        # Documented exceptions last, so they override expression.
+        for j, i in zip(posts, pres):
+            want = SIGN_OVERRIDES.get((_cell_class(self.names[i]),
+                                       _cell_class(self.names[j])))
+            if want is None:
+                continue
+            self.E_syn[j, i] = ((E_INH_MUSCLE if self.is_muscle[j] else E_INH)
+                                if want == "inhibitory" else E_EXC)
+            self.sign_provenance["behavioural_override"] += 1
 
     # -- queries --------------------------------------------------------
     def idx(self, name: str) -> int:
