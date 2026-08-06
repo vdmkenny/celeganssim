@@ -112,6 +112,38 @@ def _wt():
     return ok, f"speed {g['speed']:.3f} mm/s, amplitude {g['amplitude']*100:.1f}% BL"
 
 
+@check("the network drives the muscles, not a script",
+       "the dorsoventral difference in real muscle activation should itself "
+       "oscillate: a clean spectral peak in the 0.2-1.2 Hz undulation band, "
+       "with a swing big enough to bend the body. This is the acceptance test "
+       "for a connectome-generated rhythm, and it reads only the neuromuscular "
+       "output, so no scripted quantity can satisfy it",
+       "Wen et al. 2012 Neuron 76:750 (proprioceptive coupling propagates the "
+       "wave); Gao & Zhen 2011 PNAS 108:2557 (motor neuron input sets muscle "
+       "activity); Cronin et al. 2005 Genetics (0.47 Hz wild-type undulation)",
+       xfail="the connectome delivers no rhythm to the muscles at all. The "
+             "dorsoventral drive difference has sd 0.003 against the scripted "
+             "oscillator's 0.599, a factor of 200, and a peak-to-median power "
+             "ratio of 8 where a clean tone is orders of magnitude. Motor "
+             "neurons sit at their solved resting equilibrium, so activation "
+             "stays at 0.5 by construction and nothing pushes it off: there is "
+             "no oscillation in the network to phase-lock to. Closing this "
+             "needs muscle force, the body reading real muscle output, and "
+             "proprioceptive feedback (issue #10)")
+def _emergent_drive():
+    from .kinematics import dominant_frequency, muscle_drive, rhythmicity
+    dor, ven, dt = muscle_drive(_sim(), seconds=60.0, settle=10.0)
+    mid = dor.shape[1] // 2
+    diff = (dor - ven)[:, mid]
+    swing = float(np.std(diff))
+    peak = rhythmicity(diff, dt)
+    freq = dominant_frequency(diff, dt)
+    ok = swing > 0.05 and peak > 50.0 and 0.2 <= freq <= 1.2
+    return ok, (f"dorsoventral drive sd {swing:.4f} (want >0.05), "
+                f"spectral peak-to-median {peak:.1f} (want >50), "
+                f"dominant {freq:.2f} Hz (want 0.2-1.2)")
+
+
 @check("passive properties match patch-clamp measurements",
        "neuron: input resistance 1.6-8 GOhm, membrane time constant 3-10 ms, "
        "a gap junction pair coupled at tens of pS not nanosiemens. Muscle is a "

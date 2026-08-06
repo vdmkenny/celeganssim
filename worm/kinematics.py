@@ -262,6 +262,49 @@ def reversal_events(rec: GaitRecording, window_s: float = 3.0,
     }
 
 
+def rhythmicity(x: np.ndarray, dt: float,
+                fmin: float = 0.05, fmax: float = 4.0) -> float:
+    """Ratio of peak to median spectral power in a band.
+
+    Separates an oscillation from a drifting or noisy signal, which a dominant
+    frequency alone cannot do: `dominant_frequency` always returns the largest
+    bin even when the spectrum is flat. White noise sits near 1, a clean tone
+    runs to many orders of magnitude.
+    """
+    x = np.asarray(x, dtype=float)
+    x = x - x.mean()
+    if len(x) < 8 or not np.any(np.abs(x) > 1e-15):
+        return 0.0
+    power = np.abs(np.fft.rfft(x * np.hanning(len(x)))) ** 2
+    freq = np.fft.rfftfreq(len(x), dt)
+    band = (freq >= fmin) & (freq <= fmax)
+    if not band.any():
+        return 0.0
+    med = float(np.median(power[band]))
+    return float(power[band].max() / med) if med > 0 else 0.0
+
+
+def muscle_drive(sim, seconds: float = 60.0, settle: float = 10.0):
+    """Per-segment dorsal and ventral activation of the REAL muscle cells.
+
+    Reads the connectome's own neuromuscular output rather than whatever the
+    body model was told to do, so the two can be compared directly. Returns
+    (dorsal, ventral, dt) with arrays shaped [time, segment].
+    """
+    for _ in range(int(settle / sim.cfg.dt)):
+        sim.step()
+    n = int(seconds / sim.cfg.dt)
+    dor = np.zeros((n, N_SEG))
+    ven = np.zeros((n, N_SEG))
+    for t in range(n):
+        sim.step()
+        act = sim.ns.activation()
+        for s in range(N_SEG):
+            dor[t, s] = np.mean(act[sim.row_d[s]]) if sim.row_d[s] else 0.0
+            ven[t, s] = np.mean(act[sim.row_v[s]]) if sim.row_v[s] else 0.0
+    return dor, ven, sim.cfg.dt
+
+
 def measure(sim, seconds: float = 60.0, settle: float = 10.0) -> dict:
     """Convenience: run, analyse, and include reversal detection."""
     rec = record(sim, seconds=seconds, settle=settle)

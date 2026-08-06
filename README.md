@@ -274,6 +274,14 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 
 - **The locomotor rhythm is imposed, not emergent.** The network sets its
   amplitude, direction and frequency, but the oscillation itself is modelled.
+  The size of that gap is measured rather than asserted: reading the real
+  neuromuscular output, the dorsoventral difference in muscle activation has a
+  standard deviation of 0.003 against the scripted oscillator's 0.599, and a
+  peak-to-median spectral power ratio of 8 where a clean rhythm is orders of
+  magnitude. The connectome as wired delivers no undulatory rhythm to the
+  muscles at all, because motor neurons sit at their solved resting equilibrium
+  and nothing displaces them. `worm validate` carries this as a registered
+  expected failure, so progress against it is visible.
   [docs/emergent-cpg.md](docs/emergent-cpg.md) sets out what an emergent version
   requires. No published model produces C. elegans locomotion emergently from
   the connectome.
