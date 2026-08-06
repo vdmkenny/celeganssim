@@ -57,6 +57,18 @@ DEFAULT_POLARITY = +0.5  # unknown transmitter: weak excitation
 E_EXC = 0.0     # excitatory synaptic reversal potential, mV
 E_INH = -48.0   # inhibitory synaptic reversal potential, mV
 
+# The neuromuscular junction is not the neuronal case and does not use E_INH.
+# The muscle GABA receptor (UNC-49) is chloride-permeant: its reversal tracked
+# the predicted chloride equilibrium across two solution changes, +17 mV
+# measured against +24 mV predicted, and -10 mV against -8 mV predicted
+# (Richmond & Jorgensen 1999 Nat Neurosci 2:791). Under physiological internal
+# chloride E_Cl is about -30 mV, and muscle rests at -25 mV, so GABA at the NMJ
+# is only 5 mV of hyperpolarising drive and acts mainly by shunting
+# (Gao & Zhen 2011 PNAS 108:2557, which attributes the depolarised muscle rest
+# to that same high chloride permeability). Using the neuronal -48 mV here
+# would overstate GABAergic drive on muscle by about 4.6x at rest.
+E_INH_MUSCLE = -30.0   # muscle chloride reversal potential, mV
+
 
 class Connectome:
     def __init__(self, cells: dict, edges: list[dict]) -> None:
@@ -100,6 +112,11 @@ class Connectome:
         # Per-edge reversal potential, defaulting to the presynaptic cell's
         # transmitter but overridable for documented exceptions.
         self.E_syn = np.tile(self.E_pre_default[np.newaxis, :], (n, 1))
+        # Muscle rows swing to the chloride reversal, not the neuronal one.
+        pol_m = np.clip(self.polarity, -1.0, 1.0)
+        self.E_syn[self.is_muscle, :] = (
+            E_INH_MUSCLE + (pol_m + 1.0) * 0.5 * (E_EXC - E_INH_MUSCLE)
+        )[np.newaxis, :]
 
         skipped = 0
         for e in self.edges:
@@ -186,9 +203,10 @@ class Connectome:
                 self.sign_provenance["transmitter_fallback"] += 1
                 continue
             before = float(self.E_syn[j, i])
-            self.E_syn[j, i] = E_EXC if exc > inh else E_INH
+            e_inh = E_INH_MUSCLE if self.is_muscle[j] else E_INH
+            self.E_syn[j, i] = E_EXC if exc > inh else e_inh
             self.sign_provenance[tag] += 1
-            if (before == E_INH) != (exc < inh):
+            if (before == e_inh) != (exc < inh):
                 self.sign_flips.append((self.names[i], post, before,
                                         float(self.E_syn[j, i])))
 

@@ -455,6 +455,43 @@ def _sign_truth():
          f"{len(c.sign_flips)} flips vs the transmitter heuristic")
 
 
+@check("neuromuscular conductance matches the measured junction",
+       "the whole-cell cholinergic conductance of a body-wall muscle should "
+       "come out near the patch-clamp value. This tests a load-bearing "
+       "assumption: that connectome contact counts times a generic per-contact "
+       "conductance give physiological synaptic strength. Also that the "
+       "junction's reversal potentials are the measured ones, a non-selective "
+       "cation channel near 0 mV for acetylcholine and the chloride "
+       "equilibrium near -30 mV for GABA, not the neuronal -48 mV",
+       "Richmond & Jorgensen 1999 Nat Neurosci 2:791: acetylcholine 774 +/- 79 "
+       "pA (n=22) at -80 mV holding, E_rev +11 mV -> 8.5 nS; GABA receptor "
+       "chloride-permeant. Gao & Zhen 2011 PNAS 108:2557: E_Cl about -30 mV",
+       section="consistency")
+def _nmj():
+    import numpy as np
+
+    from .connectome import E_INH_MUSCLE, Connectome
+    from .genome import Genome
+    from .nervous_system import NervousSystem
+    c = Connectome.load()
+    ns = NervousSystem(c, Genome.load())
+    m = c.is_muscle
+    Gs = c.Gs * ns.p.g_syn                      # nS at full activation
+    E = c.E_syn
+    # Pressure-ejected acetylcholine activates the cholinergic receptors only,
+    # so the comparable quantity is the excitatory conductance.
+    chol = np.median((Gs * (E > E_INH_MUSCLE / 2.0))[m].sum(axis=1))
+    measured = 774.0 / (80.0 + 11.0)            # pA / mV -> nS
+    ratio = chol / measured
+    e_on_muscle = E[m][Gs[m] > 0]
+    ok = (0.3 <= ratio <= 3.0
+          and abs(e_on_muscle.max() - 0.0) < 1.0
+          and abs(e_on_muscle.min() - E_INH_MUSCLE) < 1.0)
+    return ok, (f"cholinergic {chol:.2f} nS per muscle against {measured:.2f} "
+                f"measured ({ratio:.2f}x); junction reversals "
+                f"{e_on_muscle.min():.0f} to {e_on_muscle.max():.0f} mV")
+
+
 @check("tdc-1 impairs the omega turn",
        "tyramine loss leaves reversals but degrades the ventral omega turn",
        "Donnelly et al. 2013 PLoS Biol: 32% complete the omega vs wild type")

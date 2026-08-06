@@ -171,6 +171,17 @@ than inheriting the neuronal ones. The depolarised rest is attributed to a high
 chloride permeability rather than a potassium equilibrium, which is why it
 cannot be recovered from a neuronal leak.
 
+The neuromuscular junction is measured rather than assumed. Acetylcholine acts
+on a non-selective cation channel reversing near 0 mV, and GABA on the
+chloride-permeant UNC-49 receptor, whose reversal is about -30 mV against a
+-25 mV resting potential: at the junction GABA is only 5 mV of hyperpolarising
+drive and works mainly by shunting, so it does not take the neuronal -48 mV.
+The strength is a check on the model rather than a free parameter. Multiplying
+the connectome's contact counts by the generic per-contact conductance gives
+5.0 nS of cholinergic conductance per muscle, against 8.5 nS measured by
+patch clamp, so the wiring weights land within a factor of two of the junction
+without being fitted to it.
+
 | Module | Role |
 |---|---|
 | `worm/genome.py` | annotation, gene lookup, knockouts, expression |
@@ -319,6 +330,7 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 - [Jospin et al. (2002), J. Cell Biol. 159:337](https://doi.org/10.1083/jcb.200203055) (calcium reversal; muscle resting potential -19.7 mV and input resistance 1.0 GOhm)
 - [Gao & Zhen (2011), PNAS 108:2557](https://doi.org/10.1073/pnas.1012346108) (muscle resting potential -25.0 mV, calcium action potentials)
 - [Richmond (2006), WormBook](https://doi.org/10.1895/wormbook.1.112.1) (neuromuscular junction recording; muscle capacitance ~70 pF)
+- [Richmond & Jorgensen (1999), Nat. Neurosci. 2:791](https://doi.org/10.1038/12160) (one GABA and two acetylcholine receptors at the NMJ; 774 pA acetylcholine response, chloride-permeant UNC-49)
 - [C. elegans Neural Interactome](https://github.com/shlizee/C-elegans-Neural-Interactome)
 
 **Transmitters and expression**
