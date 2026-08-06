@@ -112,6 +112,56 @@ def _wt():
     return ok, f"speed {g['speed']:.3f} mm/s, amplitude {g['amplitude']*100:.1f}% BL"
 
 
+@check("muscle activation leads curvature by the measured phase",
+       "peak muscle activation should sit about 45 degrees, an eighth of a "
+       "cycle, ahead of peak midline curvature",
+       "Butler et al. 2015 J R Soc Interface 12:20140963: ~45 deg raw and "
+       "49.9 deg (95% CI 46.5-53.3) corrected for indicator kinetics, held "
+       "across a threefold change in wavelength from crawling to swimming",
+       xfail="the model gives 8 degrees against a measured 45. The phase here "
+             "is set by one mechanical time constant, body.curvature_tau_s at "
+             "60 ms, which at 0.47 Hz can only produce arctan(2*pi*f*tau) = 8 "
+             "degrees. Raising that constant to 340 ms would hit 45 degrees at "
+             "this frequency and then miss everywhere else, because a fixed "
+             "time constant makes phase scale with frequency: it would read 33 "
+             "degrees at the 0.30 Hz crawl and 75 at the 1.76 Hz swim. The "
+             "measurement is that the phase barely moves across that range, so "
+             "a constant phase cannot come from a constant delay. Activation "
+             "timing has to scale with the cycle, which is what curvature "
+             "feedback does and a clock does not, so this is a second "
+             "acceptance test for the proprioceptive loop (issue #10)")
+def _activation_phase():
+    from .kinematics import analyse, record
+    got = analyse(record(_sim(), seconds=60.0, settle=10.0))
+    phase = got["phase_drive_to_curvature_deg"]
+    return 30.0 <= phase <= 65.0, \
+        (f"activation leads curvature by {phase:+.1f} deg (want ~45) at "
+         f"{got['undulation_hz']:.2f} Hz")
+
+
+@check("muscle calcium reproduces the measured transient",
+       "force follows calcium, so the calcium stage sets when a muscle pulls. "
+       "Its impulse response must peak where the measured transient peaks",
+       "Butler et al. 2015 J R Soc Interface 12:20140963 Fig 3b: electrically "
+       "evoked GCaMP3 in dissected body-wall muscle, exp(-t/0.88 s) - "
+       "exp(-t/0.25 s), peak 0.44 s after excitation",
+       section="consistency")
+def _muscle_calcium():
+    from .connectome import Connectome
+    from .genome import Genome
+    from .nervous_system import NervousSystem
+    ns = NervousSystem(Connectome.load(), Genome.load())
+    p = ns.p
+    t_r, t_d = p.ca_rise_ms / 1000.0, p.ca_decay_ms / 1000.0
+    # Peak of exp(-t/t_d) - exp(-t/t_r), the response of the two-stage cascade.
+    peak = np.log(t_d / t_r) / (1.0 / t_r - 1.0 / t_d)
+    ca = ns.muscle_calcium()
+    ok = (0.42 <= peak <= 0.46 and ca.size == int(ns.conn.is_muscle.sum())
+          and bool(np.all(np.isfinite(ca))))
+    return ok, (f"rise {t_r*1000:.0f} ms, decay {t_d*1000:.0f} ms, "
+                f"peak {peak:.3f} s (measured 0.44); {ca.size} muscles tracked")
+
+
 @check("the network drives the muscles, not a script",
        "the dorsoventral difference in real muscle activation should itself "
        "oscillate: a clean spectral peak in the 0.2-1.2 Hz undulation band, "

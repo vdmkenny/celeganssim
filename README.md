@@ -31,7 +31,7 @@ processed files.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 30 checks against published measurements, in parallel
+worm validate         # 32 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -169,6 +169,14 @@ have a capacitance of 70 pF against 1.5 pF, and a membrane time constant of
 70 ms against 6 ms. The depolarised rest reflects a high chloride permeability
 rather than a potassium equilibrium.
 
+Muscle force follows calcium rather than membrane potential, so each muscle
+carries a calcium stage: two first-order filters whose combined impulse
+response is the measured transient, rising with a 250 ms and decaying with an
+880 ms time constant and peaking 0.44 s after excitation. Contractile calcium
+in this animal comes from sarcoplasmic release through the ryanodine receptor
+UNC-68 gated by EGL-19. Calcium here is normalised drive, not a concentration:
+no C. elegans muscle calcium measurement has ever been calibrated to nM or uM.
+
 At the neuromuscular junction, acetylcholine acts on a non-selective cation
 channel reversing near 0 mV and GABA on the chloride-permeant UNC-49 receptor
 reversing near -30 mV, so against a -25 mV resting potential GABA contributes
@@ -187,7 +195,7 @@ measured by patch clamp.
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 30 checks: 21 behavioural, 9 consistency, gaps as expected failures |
+| `worm/validate.py` | 32 checks: 22 behavioural, 10 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry with provenance tags |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -215,9 +223,9 @@ rather than making it, so are not modelled as GABAergic.
 
 ## Validation
 
-`worm validate` runs 30 checks against published measurements: 21 behavioural
-(the animal is run and measured) and 9 consistency checks (parameter and data
-invariants). 26 pass. Four are registered expected failures, each naming the
+`worm validate` runs 32 checks against published measurements: 22 behavioural
+(the animal is run and measured) and 10 consistency checks (parameter and data
+invariants). 27 pass. Five are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
@@ -225,7 +233,8 @@ adapt gait to the medium
 spontaneous reversals there are no pirouettes, so chemotaxis cannot
 discriminate salt-blind mutants, and `goa-1` loses to constant reversing the
 speed its deeper, faster bends would otherwise gain
-([issue #6](https://github.com/vdmkenny/celeganssim/issues/6)).
+([issue #6](https://github.com/vdmkenny/celeganssim/issues/6)). Muscle
+activation also leads curvature by 8 degrees where the animal holds about 45.
 
 | Check | Model | Published |
 |---|---|---|
@@ -350,6 +359,8 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 - [Deng et al. (2021), eNeuro 8:ENEURO.0241-20.2020](https://doi.org/10.1523/ENEURO.0241-20.2020)
 - [Cronin et al. (2005), BMC Genet. 6:5](https://doi.org/10.1186/1471-2156-6-5) (gait metrics)
 - [Fang-Yen et al. (2010), PNAS 107:20323](https://doi.org/10.1073/pnas.1003016107)
+- [Butler et al. (2015), J. R. Soc. Interface 12:20140963](https://doi.org/10.1098/rsif.2014.0963) (muscle calcium transient, activation-to-curvature phase)
+- [Liu et al. (2011), J. Physiol. 589:101](https://doi.org/10.1113/jphysiol.2010.200683) (muscle action potentials, UNC-68 calcium release)
 
 **Musculature and the neuromuscular junction**
 - Sulston & Horvitz (1977), Dev. Biol. 56:110 (post-embryonic lineage; 95 muscles, 24/24/24/23 quadrants)

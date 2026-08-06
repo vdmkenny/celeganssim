@@ -93,6 +93,27 @@ class NeuralParams:
     # junction of C. elegans", WormBook doi:10.1895/wormbook.1.112.1.
     C_muscle = 70.0         # membrane capacitance, pF -> tau_m = 70 ms
 
+    # Muscle calcium. Force follows calcium, not membrane potential, and the
+    # calcium transient is an order of magnitude slower than the membrane, so
+    # it is the stage that sets when a muscle actually pulls. Contractile
+    # calcium comes from SR release through the ryanodine receptor UNC-68
+    # gated by EGL-19: transients are abolished by nemadipine-A and absent in
+    # unc-68 nulls (Liu et al. 2011 J Physiol 589:101 Fig 10).
+    #
+    # Kinetics are the electrically evoked GCaMP3 transient in dissected
+    # body-wall muscle, fitted as exp(-t/0.88 s) - exp(-t/0.25 s) with its peak
+    # 0.44 s after excitation (Butler et al. 2015 J R Soc Interface 12:20140963
+    # Fig 3b). A cascade of two first-order filters with these constants
+    # reproduces that impulse response, and its peak time
+    # ln(t_d/t_r) / (1/t_r - 1/t_d) comes out at 0.439 s independently.
+    #
+    # This is indicator fluorescence, so it is an upper bound on the true
+    # transient: GCaMP3 kinetics are convolved into it and cannot be removed.
+    # Absolute free calcium has never been measured in this animal, in any
+    # units, so calcium here is normalised drive rather than a concentration.
+    ca_rise_ms = 250.0      # calcium rise time constant, ms
+    ca_decay_ms = 880.0     # calcium decay time constant, ms
+
     beta = 0.125      # sigmoid steepness, 1/mV
     a_r = (1.0 / 1.5) / 1000.0   # synaptic rise rate, 1/ms  (0.667 s^-1)
     a_d = (5.0 / 1.5) / 1000.0   # synaptic decay rate, 1/ms (3.33 s^-1)
@@ -139,6 +160,8 @@ PROVENANCE = {
     "E_muscle": "measured",      # Gao & Zhen 2011; Jospin et al. 2002
     "G_leak_muscle": "measured", # R_in 1.0 GOhm, Jospin et al. 2002
     "C_muscle": "measured",      # ~70 pF, Richmond WormBook
+    "ca_rise_ms": "measured",    # Butler et al. 2015 Fig 3b (GCaMP3)
+    "ca_decay_ms": "measured",   # same fit; peak 0.44 s after excitation
     "beta": "published",    # Kunert et al. 2014
     "a_r": "published",     # Wicks/Kunert, 1.5x time rescale
     "a_d": "published",
@@ -204,6 +227,7 @@ class NervousSystem:
         # so they are arrays rather than scalars; see NeuralParams for the
         # measurements. Muscle rest is measured in 27 and 12 cells respectively
         # and is a target for calibrate_rest like any other measured cell.
+        self._muscle_idx = np.where(conn.is_muscle)[0]
         self.C = np.where(conn.is_muscle, self.p.C_muscle, self.p.C)
         self.G_leak = np.where(conn.is_muscle, self.p.G_leak_muscle,
                                self.p.G_leak)
@@ -332,6 +356,11 @@ class NervousSystem:
         self.V_th = self._solve_thresholds()
         self.V = self.V_th.copy()
         self.s = np.full(self.n, self.s_eq)
+        # Muscle calcium, as a two-stage cascade so the impulse response is
+        # the measured biexponential. Starts at the resting activation, which
+        # is 0.5 because each threshold is solved to its own resting potential.
+        self.ca_stage = np.full(self._muscle_idx.size, 0.5)
+        self.ca = np.full(self._muscle_idx.size, 0.5)
         # Slow recovery variable of the intrinsic oscillator, at its steady
         # state for the resting potential.
         self.w = self._w_inf(self.V)
@@ -410,6 +439,15 @@ class NervousSystem:
         s_inf = p.a_r * phi / rate
         self.s = np.clip(s_inf + (s - s_inf) * np.exp(-dt * rate), 0.0, 1.0)
 
+        # Muscle calcium follows activation through two first-order stages,
+        # which together give the measured exp(-t/t_d) - exp(-t/t_r) transient.
+        if self._muscle_idx.size:
+            drive_m = phi[self._muscle_idx]
+            k_r = 1.0 - np.exp(-dt / p.ca_rise_ms)
+            k_d = 1.0 - np.exp(-dt / p.ca_decay_ms)
+            self.ca_stage += (drive_m - self.ca_stage) * k_r
+            self.ca += (self.ca_stage - self.ca) * k_d
+
         if noise > 0:
             self.V += self.rng.normal(0.0, noise, self.n)
         if len(self._ablated_idx):
@@ -422,6 +460,15 @@ class NervousSystem:
         v = self.V if idx is None else self.V[idx]
         th = self.V_th if idx is None else self.V_th[idx]
         return 1.0 / (1.0 + np.exp(-self.p.beta * (v - th)))
+
+    def muscle_calcium(self) -> np.ndarray:
+        """Calcium of each body-wall muscle, in the order of self._muscle_idx.
+
+        Normalised drive rather than a concentration: no C. elegans body-wall
+        muscle calcium measurement has ever been calibrated to nM or uM, so
+        every published transient is a fluorescence ratio.
+        """
+        return self.ca
 
     def potential(self, name: str) -> float:
         return float(self.V[self.conn.idx(name)])
