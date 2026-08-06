@@ -29,6 +29,12 @@ JavaScript, with no build step. Datasets are not redistributed here:
 `fetch_data.py` pulls each from its publisher, verifies it, and builds the
 processed files.
 
+The connectome is Cook et al.'s corrected July 2020 release, published as an
+Excel workbook and read by `scripts/xlsx.py`, a standard-library reader added
+so the project keeps its numpy-only dependency. The 2019 edgelist and the
+White et al. 1986 file are downloaded for comparison and are not used to build
+anything.
+
 ```bash
 worm serve            # live browser viewer
 worm validate         # 38 checks against published measurements, in parallel
@@ -220,7 +226,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | Dataset | Source | Contents |
 |---|---|---|
 | Genome annotation | NCBI RefSeq GCF_000002985.6 (WBcel235) | 46,926 genes, 19,983 protein-coding |
-| Connectome | Cook et al., corrected July 2020 release, via OpenWorm ConnectomeToolbox | 473 cells, 7,762 edges |
+| Connectome | Cook et al., corrected July 2020 release, via OpenWorm ConnectomeToolbox | 473 cells, 7,762 edges (302 neurons, 95 body-wall muscles) |
 | Neuron metadata | OpenWorm owmeta | type and transmitter for 302 neurons |
 | Expression | CeNGEN via wormneuroatlas | 128 neuron classes x 13,669 genes |
 | Cell classification | WormAtlas | lineage and anatomical class |

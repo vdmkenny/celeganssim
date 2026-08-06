@@ -4,7 +4,14 @@ Inputs (data/raw/):
   celegans_genome.fna.gz      NCBI WBcel235 assembly (RefSeq GCF_000002985.6)
   celegans_annotation.gff.gz  matching RefSeq annotation
   cook_2020_adjacency.xlsx    Cook et al. connectome adjacency matrices,
-                              corrected July 2020 (hermaphrodite sheets)
+                              corrected July 2020, hermaphrodite chemical and
+                              symmetric gap-junction sheets. Read through
+                              scripts/xlsx.py, a standard-library reader, so
+                              the project keeps its numpy-only dependency.
+                              This is the connectome; the 2019 edgelist and
+                              the White 1986 file that fetch_data.py also
+                              downloads are comparison material and are not
+                              read here.
   owmeta_cache.json           OpenWorm curated neuron/muscle metadata
   all_cell_info.csv           WormAtlas cell classifications
 

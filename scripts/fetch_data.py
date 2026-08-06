@@ -30,6 +30,14 @@ CTB = "https://raw.githubusercontent.com/openworm/ConnectomeToolbox/main/cect/da
 C302 = "https://raw.githubusercontent.com/openworm/c302/master/c302/data"
 
 # (local filename, url, description, gzip?)
+#
+# The connectome the simulator runs on is cook_2020_adjacency.xlsx, Cook et
+# al.'s corrected July 2020 release, read by scripts/xlsx.py. The 2019
+# edgelist and the White 1986 file below are NOT used to build anything: they
+# are kept because the corrected release has to be checkable against what it
+# corrects, and because the White files are what a reader reaches for when
+# asking whether another dataset covers the posterior body (it does not, see
+# worm/connectome.py). scripts/build_data.py lists exactly what it reads.
 FILES: list[tuple[str, str, str, bool]] = [
     ("celegans_genome.fna.gz",
      f"{NCBI}/GCF_000002985.6_WBcel235_genomic.fna.gz",
@@ -42,7 +50,7 @@ FILES: list[tuple[str, str, str, bool]] = [
      "RefSeq feature table", True),
     ("herm_full_edgelist.csv",
      f"{CTB}/herm_full_edgelist.csv",
-     "Cook et al. 2019 hermaphrodite connectome (via OpenWorm)", False),
+     "Cook et al. 2019 edgelist: superseded, kept for comparison", False),
     ("all_cell_info.csv",
      f"{CTB}/all_cell_info.csv",
      "WormAtlas cell classifications", False),
@@ -51,10 +59,10 @@ FILES: list[tuple[str, str, str, bool]] = [
      "WormAtlas neuron names and lineages", False),
     ("cook_2020_adjacency.xlsx",
      f"{CTB}/SI%205%20Connectome%20adjacency%20matrices,%20corrected%20July%202020.xlsx",
-     "Cook et al. connectome adjacency matrices, corrected July 2020", False),
+     "Cook et al. adjacency matrices, corrected July 2020 (THE connectome)", False),
     ("aconnectome_white_1986_whole.csv",
      f"{CTB}/aconnectome_white_1986_whole.csv",
-     "White et al. 1986 connectome (reference/comparison)", False),
+     "White et al. 1986 connectome: comparison only, has no muscle edges", False),
     ("owmeta_cache.json",
      f"{C302}/owmeta_cache.json",
      "OpenWorm owmeta neuron and muscle metadata", False),
