@@ -290,9 +290,19 @@ is downstream of every neuron the assays read, so the command balance stays
 clean and touch discrimination survives, and upstream of the mechanics, so
 the muscles are load-bearing: ablation bends the animal, GABA loss produces
 the shrinker through real co-contraction, and the body runs on real muscle
-calcium. It is now the only mode, with the body oscillator deleted. Wild-type
-gait comes out at 0.215 mm/s and 19.7% BL against measured values of 0.20 and
-19.3%, and the harness recovers the prescribed 0.47 Hz and 0.62 BL from the
-production path itself. The scripted surface is one function; making the
+calcium. It is now the only mode, with the body oscillator deleted. Two calibrations
+belong to this coupling point and were found by their failure modes. The drive
+is prescribed as a voltage swing converted per cell through its resting
+conductance, because equal current curls the path: ventral muscle carries
+about twice the GABAergic shunt of dorsal (13 VD against 6 DD motor neurons).
+And force is referenced to each muscle's own tonic baseline, measured once on
+the pristine network with the pacer silent, because standing sensory input
+holds each muscle slightly off the global rest and referencing force to 0.5
+rectified that offset into a standing bend that curled the whole trajectory
+into a 2 mm box at full odometer speed. The gait check now requires net
+displacement, not just path length, so that failure cannot pass again.
+Wild-type gait comes out at 0.248 mm/s (net 0.245) and 19.2% BL against
+measured values of 0.20 and 19.3%, and the harness recovers the prescribed
+0.47 Hz and 0.62 BL from the production path itself. The scripted surface is one function; making the
 rhythm emerge rather than be injected remains the problem this document
 records as unsolved.

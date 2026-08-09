@@ -53,6 +53,10 @@ HEAD_STEER_EXTENT_BL = 8.0 / 24.0
 # the shrinker's shortening (McIntire, Jorgensen, Kaplan & Horvitz 1993
 # Nature 364:337).
 RECTIFIED_WAVE_MEAN = 1.0 / np.pi
+# Neural substeps to settle the tonic calcium baseline at startup: covers
+# several muscle calcium time constants (rise 250 ms, decay 880 ms, Butler et
+# al. 2015), measured once on the pristine network.
+CA_BASELINE_SETTLE_STEPS = 4000
 
 # Proprioceptive coupling length, as a fraction of body length. Motor activity
 # in a posterior region requires the active bending of an anterior region
@@ -125,12 +129,23 @@ class SimConfig:
     # (nmj gate, gaba cross-inhibition) keep their validated couplings by
     # gating this current exactly as they gated the oscillator. Amplitude in
     # pA per muscle, fitted to the measured bend amplitude.
-    muscle_pacemaker_pa: float = 40.0
+    # Prescribed as a VOLTAGE swing, converted per muscle through that
+    # cell's own resting conductance (I = mV x G_rest). Injecting equal
+    # CURRENT into every muscle turns the animal in circles: ventral muscle
+    # carries roughly twice the GABAergic shunt of dorsal (13 VD against 6 DD
+    # motor neurons, White et al. 1986), so equal current moves ventral cells
+    # less and the standing dorsal excess curls the path (measured: mean
+    # force 0.332 dorsal vs 0.274 ventral, 0.65/mm standing curvature, the
+    # whole trajectory inside a 2 mm box). Equal voltage cancels the wiring
+    # asymmetry structurally.
+    muscle_pacemaker_mv: float = 6.0
     # Calcium-to-force gain. The transfer function is unmeasured in this
     # animal (no length-tension, no force-velocity, no calibrated
     # calcium-to-force curve; Butler et al. 2015 say so), so the scale is fit
-    # to the measured bend amplitude of ~19-21%% BL (Cronin et al. 2005).
-    muscle_force_gain: float = 8.0
+    # to the measured bend amplitude of ~19-21%% BL (Cronin et al. 2005),
+    # with force referenced to each muscle's tonic baseline: 16.0 gives
+    # 19.1%% BL at 0.25 mm/s net.
+    muscle_force_gain: float = 16.0
     start_adult: bool = True      # False starts as a freshly hatched L1
     # How many seconds of development pass per second of simulated behaviour.
     # Real development takes ~50 h, which nobody wants to watch in real time.
@@ -154,7 +169,7 @@ PROVENANCE = {
     "tonic_forward": "scripted",  # stands in for AVB->B tonic drive
     "command_gain": "tuned",
     "seed": "tuned",
-    "muscle_pacemaker_pa": "scripted",  # the wave, delivered at the end organ
+    "muscle_pacemaker_mv": "scripted",  # the wave, delivered at the end organ
     "muscle_force_gain": "tuned",    # fit to measured bend amplitude
     "propr_gain": "tuned",   # no stretch-evoked current ever recorded
     "start_adult": "tuned",
@@ -235,12 +250,43 @@ class WormSimulation:
                                 for n in mus])
         self._mus_dorsal = np.array(
             [self.conn.cell_info[n]["side"] == "dorsal" for n in mus])
+        # Resting total conductance per muscle, from the pristine wild-type
+        # network, so the mV-to-pA conversion is a fixed anatomical frame:
+        # knockouts and ablations shift a cell relative to this baseline
+        # rather than silently re-normalising the drive.
+        ns = self.ns
+        g_tot = (ns.G_leak + (ns.Gg_eff * ns.p.g_gap).sum(axis=1)
+                 + ns.s_eq * (ns.Gs_eff * ns.g_syn_row).sum(axis=1))
+        self._mus_g0 = g_tot[self._mus_idx].copy()
         self._pace_phase = 0.0
         # Pacing runs on the previous body step's drives, one dt behind.
         self._pace_drive = (0.0, 0.0, 0.0, 1.0)  # fwd, bwd, steer, rate
 
         self.state = SimState()
         self.reset()
+        # Per-muscle tonic operating point. Standing sensory input (ambient
+        # oxygen, AWC's tonic activity, temperature) plus the asymmetric
+        # GABAergic shunt (13 VD against 6 DD motor neurons, White et al.
+        # 1986) hold each muscle's calcium at its own baseline, slightly off
+        # the global rest and different dorsal versus ventral. Referencing
+        # force to the global 0.5 rectifies that offset into a standing bend
+        # (measured: +0.65/mm mean curvature, the path curling into a 2 mm
+        # box), so force is referenced to each muscle's own tonic baseline,
+        # measured here once on the pristine wild-type network with the pacer
+        # silent. Knockouts and ablations are applied afterwards and
+        # therefore shift a cell relative to this wild-type frame, which is
+        # what keeps the shrinker and ablation phenotypes visible.
+        nodes = self.body.world_nodes()
+        I0 = self.sensory.compute(self.env, nodes[0], nodes[-1], self.cfg.dt,
+                                  amplitude=self.cfg.sensory_amplitude)
+        sub_dt = (self.cfg.dt * 1000.0) / self.cfg.neural_substeps
+        for _ in range(CA_BASELINE_SETTLE_STEPS):
+            self.ns.step(sub_dt, I0, noise=0.0)
+        self._mus_ca0 = self.ns.muscle_calcium().copy()
+        self.ns.reset()
+        self.sensory._salt_prev = None
+        self.sensory._odor_prev = None
+        self.sensory._temp_prev = None
 
     def _build_proprioception(self) -> None:
         """Wire each B-type motor neuron to the curvature just anterior to it.
@@ -316,7 +362,7 @@ class WormSimulation:
         """
         cfg = self.cfg
         I = np.zeros(self.conn.n)
-        if cfg.muscle_pacemaker_pa <= 0.0:
+        if cfg.muscle_pacemaker_mv <= 0.0:
             return I
         net = fwd - bwd
         total = min(fwd + bwd, PACE_TOTAL_MAX)
@@ -334,7 +380,7 @@ class WormSimulation:
                                    0.0, 1.0)
         target = np.clip(target + np.where(self._mus_dorsal, bias, -bias),
                          0.0, 1.0)
-        I[self._mus_idx] = cfg.muscle_pacemaker_pa \
+        I[self._mus_idx] = cfg.muscle_pacemaker_mv * self._mus_g0 \
             * (target - exc * RECTIFIED_WAVE_MEAN)
         return I
 
@@ -396,9 +442,17 @@ class WormSimulation:
         neuromechanical model; this is the same placeholder.
         """
         ca = self.ns.muscle_calcium()
-        rest = MUSCLE_REST_ACTIVATION
-        f = np.clip(self.cfg.muscle_force_gain * (ca - rest) / (1.0 - rest),
-                    0.0, 1.0)
+        rest = getattr(self, "_mus_ca0", None)
+        if rest is None:
+            rest = np.full(ca.shape, MUSCLE_REST_ACTIVATION)
+        f = np.clip(self.cfg.muscle_force_gain
+                    * (ca - rest) / (1.0 - MUSCLE_REST_ACTIVATION), 0.0, 1.0)
+        # A dead muscle pulls nothing: ablation clamps the cell at the global
+        # rest, which can differ from its tonic baseline, and that residue is
+        # not force.
+        if self.ns._ablated_idx.size:
+            dead = np.isin(self.ns._muscle_idx, self.ns._ablated_idx)
+            f = np.where(dead, 0.0, f)
         d = np.array([f[r].mean() if r.size else 0.0 for r in self.ca_row_d])
         v = np.array([f[r].mean() if r.size else 0.0 for r in self.ca_row_v])
         return d, v

@@ -41,6 +41,7 @@ def gait(knockouts=(), seconds=45.0, seed=0, settle=10.0) -> dict:
     for _ in range(n_settle):
         s.step()
     d0 = s.state.distance
+    X0 = s.body.X.copy()
     amps, lens, speeds = [], [], []
     for i in range(n):
         s.step()
@@ -59,6 +60,7 @@ def gait(knockouts=(), seconds=45.0, seed=0, settle=10.0) -> dict:
             speeds.append(float(s.body.speed))
     return {
         "speed": (s.state.distance - d0) / seconds,
+        "net_speed": float(np.linalg.norm(s.body.X - X0)) / seconds,
         "inst_speed": float(np.mean(speeds)),
         "amplitude": float(np.mean(amps)) if amps else 0.0,
         "length_scale": float(np.mean(lens)),
@@ -104,12 +106,18 @@ def check(name, expectation, source, section="behaviour", xfail=None):
 
 # --------------------------------------------------------------------------
 @check("wild-type gait",
-       "speed 0.15-0.40 mm/s, undulation amplitude 12-30% of body length",
+       "speed 0.15-0.40 mm/s, undulation amplitude 12-30% of body length, and "
+       "the path must actually go somewhere: net displacement at least half "
+       "the path length, or full-speed undulation in a tight loop would pass "
+       "(it did: a standing dorsoventral force asymmetry once curled the "
+       "whole trajectory into a 2 mm box at an odometer speed of 0.21 mm/s)",
        "Cronin et al. 2005 Genetics: N2 0.20+/-0.04 mm/s, amplitude 19.3% BL")
 def _wt():
     g = gait()
-    ok = 0.15 <= g["speed"] <= 0.40 and 0.12 <= g["amplitude"] <= 0.30
-    return ok, f"speed {g['speed']:.3f} mm/s, amplitude {g['amplitude']*100:.1f}% BL"
+    ok = (0.15 <= g["speed"] <= 0.40 and 0.12 <= g["amplitude"] <= 0.30
+          and g["net_speed"] >= 0.5 * g["speed"])
+    return ok, (f"speed {g['speed']:.3f} mm/s (net {g['net_speed']:.3f}), "
+                f"amplitude {g['amplitude']*100:.1f}% BL")
 
 
 @check("an imposed bend propagates posteriorly, as in the channel experiment",
@@ -139,7 +147,7 @@ def _bend_propagation():
     free = slice(int(0.75 * N_SEG), int(0.95 * N_SEG))
     xs, ys = [], []
     for k in (-8.0, -4.0, 4.0, 8.0):
-        s = WormSimulation(config=SimConfig(seed=0, muscle_pacemaker_pa=0.0,
+        s = WormSimulation(config=SimConfig(seed=0, muscle_pacemaker_mv=0.0,
                                             propr_gain=30.0))
         n = int(10.0 / s.cfg.dt)
         got = []
@@ -180,7 +188,10 @@ def _muscle_ablation():
             s.step()
         rec = record(s, seconds=20.0, settle=0.0)
         got[label] = float(rec.curvature[:, 10:16].mean())
-    ok = got["intact"] > 0.0 and got["ablated"] < -0.3
+    # Intact must be near-straight: a large intact bias was itself the
+    # standing-bend artefact this mode once had. Ablation must produce a
+    # clearly ventral standing bend beyond it.
+    ok = abs(got["intact"]) < 0.4 and got["ablated"] < got["intact"] - 0.5
     return ok, (f"mid-body dorsoventral curvature bias: intact "
                 f"{got['intact']:+.3f}, dorsal muscles ablated "
                 f"{got['ablated']:+.3f} (ventral collapse)")
@@ -202,7 +213,7 @@ def _emergent_locomotion():
     from .simulation import SimConfig
     from .environment import Environment
     env = Environment(width=44.0, height=32.0)
-    s = WormSimulation(env=env, config=SimConfig(seed=0, muscle_pacemaker_pa=0.0))
+    s = WormSimulation(env=env, config=SimConfig(seed=0, muscle_pacemaker_mv=0.0))
     for _ in range(int(10.0 / s.cfg.dt)):
         s.step()
     d0 = s.state.distance
@@ -420,7 +431,7 @@ def _emergent_drive():
     from .kinematics import dominant_frequency, muscle_drive, rhythmicity
     from .simulation import SimConfig
     quiet = WormSimulation(env=Environment(width=44.0, height=32.0),
-                           config=SimConfig(seed=0, muscle_pacemaker_pa=0.0))
+                           config=SimConfig(seed=0, muscle_pacemaker_mv=0.0))
     dor, ven, dt = muscle_drive(quiet, seconds=60.0, settle=10.0)
     mid = dor.shape[1] // 2
     diff = (dor - ven)[:, mid]
