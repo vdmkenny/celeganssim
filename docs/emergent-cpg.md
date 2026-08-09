@@ -283,9 +283,16 @@ measurement: under neuron-level pacing the assays this simulator exists for,
 touch discrimination, the mec-4/mec-10 dissociation, ablation readouts, stop
 working. Body-level scripting keeps the network quiet enough to read.
 
-So the default stays the body oscillator, as a measured trade rather than a
-preference, and the smallest honest scripted surface is one level lower than
-hoped: the rhythm is imposed on the body, because imposing it on the neurons
-poisons every readout downstream of them. Undoing this needs the rhythm to be
-generated rather than injected, which is the original problem this document
+The resolution is a third coupling point between the two that were tried:
+the wave is imposed at the END ORGAN, as per-muscle currents into the 95 real
+muscle cells, using the same validated algebra the body oscillator used. That
+is downstream of every neuron the assays read, so the command balance stays
+clean and touch discrimination survives, and upstream of the mechanics, so
+the muscles are load-bearing: ablation bends the animal, GABA loss produces
+the shrinker through real co-contraction, and the body runs on real muscle
+calcium. It is now the only mode, with the body oscillator deleted. Wild-type
+gait comes out at 0.215 mm/s and 19.7% BL against measured values of 0.20 and
+19.3%, and the harness recovers the prescribed 0.47 Hz and 0.62 BL from the
+production path itself. The scripted surface is one function; making the
+rhythm emerge rather than be injected remains the problem this document
 records as unsolved.

@@ -37,7 +37,7 @@ anything.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 39 checks against published measurements, in parallel
+worm validate         # 38 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -217,7 +217,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 39 checks: 26 behavioural, 13 consistency, gaps as expected failures |
+| `worm/validate.py` | 38 checks: 25 behavioural, 13 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry, provenance tags enforced by a check |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -245,9 +245,9 @@ rather than making it, so are not modelled as GABAergic.
 
 ## Validation
 
-`worm validate` runs 37 checks against published measurements: 26 behavioural
+`worm validate` runs 38 checks against published measurements: 25 behavioural
 (the animal is run and measured) and 12 consistency checks (parameter and data
-invariants). 29 pass. Ten are registered expected failures, each naming the
+invariants). 29 pass. Nine are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
