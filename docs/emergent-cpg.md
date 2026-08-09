@@ -248,3 +248,44 @@ standing potassium conductance are both real mechanisms and both work; their
 parameters were fitted to their own measurements and never against sustained
 locomotion, and each ends up halving the animal's speed. That is a bounded
 question, unlike the ones this attempt started with.
+
+## Cord-level pacing, and the measured trade that settled the default
+
+The last attempt moved the script up one level: delete the body oscillator
+from the production path and inject a phase-graded current into the measured
+motor pools instead, DB/VB when the network commands forward and DA/VA when
+it commands backward (the pools and their timing are measured: Haspel,
+O'Donovan & Hart 2010 J Neurosci 30:11151; Kawano et al. 2011 Neuron 72:572),
+with RMD/SMD carrying the head. Everything downstream is real: release scaled
+per cell by the genome, the calibrated junction, muscle calcium, force,
+shared mechanics.
+
+As locomotion, it works. 0.295 mm/s at 19.2% BL bend amplitude against a
+measured 19.3%, a forward wave, and a tail that moves (posterior bending 1.49
+of anterior), all through the real chain; unc-13 and unc-17 paralyse through
+release rather than through a gate, and the GABA classes act through the real
+UNC-49 junction. It is kept as a passing check and an opt-in configuration.
+
+As a simulator, it fails where it matters. The pacing current leaks into AVB
+and AVA through their measured gap junctions, so the command balance
+oscillates at the gait frequency at four times the size of a touch response.
+Three detectors were built and each was defeated by a different face of the
+same artefact: a level threshold (anterior touch 0.0090 to 0.0096 against a
+gentle posterior 0.0081 to 0.0090, a gap of 0.0006 that nothing separates), a
+cycle-averaged level (mec-4 null identical to wild type, so the peak is
+ripple, not touch), and a signed transient detector (posterior touch produces
+the LARGEST transients, because any change in forward drive modulates the
+pacing amplitude and the artefact tracker lags it). Phase-locked subtraction
+of the artefact helped and was kept, and was not enough.
+
+mec-4 indistinguishable from wild type on every detector is the decisive
+measurement: under neuron-level pacing the assays this simulator exists for,
+touch discrimination, the mec-4/mec-10 dissociation, ablation readouts, stop
+working. Body-level scripting keeps the network quiet enough to read.
+
+So the default stays the body oscillator, as a measured trade rather than a
+preference, and the smallest honest scripted surface is one level lower than
+hoped: the rhythm is imposed on the body, because imposing it on the neurons
+poisons every readout downstream of them. Undoing this needs the rhythm to be
+generated rather than injected, which is the original problem this document
+records as unsolved.

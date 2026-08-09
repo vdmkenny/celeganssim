@@ -139,7 +139,9 @@ def _bend_propagation():
     free = slice(int(0.75 * N_SEG), int(0.95 * N_SEG))
     xs, ys = [], []
     for k in (-8.0, -4.0, 4.0, 8.0):
-        s = WormSimulation(config=SimConfig(seed=0, emergent_muscles=True,
+        s = WormSimulation(config=SimConfig(seed=0, scripted_body=False,
+                                            cord_pacemaker_pa=0.0,
+                                            head_pacemaker_pa=0.0,
                                             propr_gain=30.0))
         n = int(10.0 / s.cfg.dt)
         got = []
@@ -182,7 +184,8 @@ def _bend_propagation():
 def _head_wave():
     from .kinematics import analyse, record
     from .simulation import SimConfig
-    s = WormSimulation(config=SimConfig(seed=0, emergent_muscles=True,
+    s = WormSimulation(config=SimConfig(seed=0, scripted_body=False,
+                                        cord_pacemaker_pa=0.0,
                                         propr_gain=30.0,
                                         head_pacemaker_pa=150.0))
     r = analyse(record(s, seconds=40.0, settle=15.0))
@@ -193,6 +196,39 @@ def _head_wave():
                 f"({r['live_segments']} of 24 segments moving), "
                 f"{r['wave_direction']} at {r['wavelength_bl']:.2f} BL, "
                 f"{r['undulation_hz']:.2f} Hz")
+
+
+@check("neuron-level pacing carries locomotion through the real chain",
+       "with the scripted body oscillator off and a phase-graded current "
+       "paced into the measured motor pools (B forward, A backward; Haspel "
+       "et al. 2010; Kawano et al. 2011), the animal must crawl through the "
+       "fully real chain: release, the calibrated junction, muscle calcium, "
+       "force. This mode is opt-in because the same current leaks into the "
+       "command neurons through their measured gap junctions and destroys "
+       "touch discrimination (mec-4 reads as wild type on every detector "
+       "tried), which is the trade the default declines",
+       "Haspel, O'Donovan & Hart 2010 J Neurosci 30:11151; Kawano et al. "
+       "2011 Neuron 72:572; Cronin et al. 2005 (speed, amplitude)")
+def _paced_gait():
+    from .kinematics import analyse, record
+    from .simulation import SimConfig
+    s = WormSimulation(env=Environment(width=44.0, height=32.0),
+                       config=SimConfig(seed=0, scripted_body=False,
+                                        cord_pacemaker_pa=100.0,
+                                        head_pacemaker_pa=100.0,
+                                        head_steer_pa=40.0,
+                                        reversal_threshold=1.0))
+    for _ in range(int(12.0 / s.cfg.dt)):
+        s.step()
+    d0 = s.state.distance
+    r = analyse(record(s, seconds=25.0, settle=0.0))
+    speed = (s.state.distance - d0) / 25.0
+    ok = (speed >= 0.10 and 0.12 <= r["bend_amplitude_bl"] <= 0.30
+          and r["wave_direction"] == "forward"
+          and r["posterior_fraction"] > 0.5)
+    return ok, (f"speed {speed:.3f} mm/s, amp {r['bend_amplitude_bl']*100:.1f}% "
+                f"BL, {r['wave_direction']}, posterior/anterior "
+                f"{r['posterior_fraction']:.2f}, via real NMJ and calcium")
 
 
 @check("the animal locomotes on connectome drive alone",
@@ -211,7 +247,9 @@ def _emergent_locomotion():
     from .simulation import SimConfig
     from .environment import Environment
     env = Environment(width=44.0, height=32.0)
-    s = WormSimulation(env=env, config=SimConfig(seed=0, emergent_muscles=True))
+    s = WormSimulation(env=env, config=SimConfig(seed=0, scripted_body=False,
+                                        cord_pacemaker_pa=0.0,
+                                        head_pacemaker_pa=0.0))
     for _ in range(int(10.0 / s.cfg.dt)):
         s.step()
     d0 = s.state.distance
@@ -427,7 +465,11 @@ def _muscle_calcium():
              "proprioceptive feedback (issue #10)")
 def _emergent_drive():
     from .kinematics import dominant_frequency, muscle_drive, rhythmicity
-    dor, ven, dt = muscle_drive(_sim(), seconds=60.0, settle=10.0)
+    from .simulation import SimConfig
+    quiet = WormSimulation(env=Environment(width=44.0, height=32.0),
+                           config=SimConfig(seed=0, cord_pacemaker_pa=0.0,
+                                            head_pacemaker_pa=0.0))
+    dor, ven, dt = muscle_drive(quiet, seconds=60.0, settle=10.0)
     mid = dor.shape[1] // 2
     diff = (dor - ven)[:, mid]
     swing = float(np.std(diff))
@@ -698,7 +740,10 @@ def _kinematics():
     from .body import BodyParams
     from .kinematics import analyse, record
     p = BodyParams()
-    got = analyse(record(_sim(), seconds=60.0, settle=10.0))
+    from .simulation import SimConfig
+    fixture = WormSimulation(env=Environment(width=44.0, height=32.0),
+                             config=SimConfig(seed=0, scripted_body=True))
+    got = analyse(record(fixture, seconds=60.0, settle=10.0))
     ok = (abs(got["undulation_hz"] - p.freq_hz) < 0.03
           and abs(got["wavelength_bl"] - p.wavelength_bl) < 0.05
           and got["wave_direction"] == "forward"

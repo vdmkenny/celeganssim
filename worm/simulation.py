@@ -88,27 +88,52 @@ class SimConfig:
     tonic_forward: float = 0.62   # baseline AVB drive -> spontaneous forward
     command_gain: float = 9.0
     seed: int = 0
-    # Drive the body from the muscle cells the connectome actually drives,
-    # instead of from the scripted ventral-cord oscillator. Off by default:
-    # the network delivers no undulatory rhythm on its own, so an animal in
-    # this mode barely moves until proprioceptive feedback closes the loop.
-    # See docs/emergent-cpg.md and the "network drives the muscles" check.
-    emergent_muscles: bool = False
+    # Drive the body from the scripted ventral-cord oscillator (default)
+    # rather than from the muscle cells. This is a MEASURED design decision,
+    # not a preference: pacing the motor neurons produces locomotion through
+    # the fully real chain (junction, calcium, force; see the paced-gait
+    # check), but the pacing current leaks into AVB and AVA through their
+    # measured gap junctions and corrupts the command readout. Under pacing,
+    # mec-4 is indistinguishable from wild type on every detector tried
+    # (level, cycle-averaged, signed transient), so touch discrimination,
+    # which is what the assays exist for, is lost. Body-level scripting keeps
+    # the network quiet enough to read; neuron-level pacing is the opt-in
+    # below.
+    scripted_body: bool = True
     # Strength of the proprioceptive current, pA per unit normalised curvature.
     # A free parameter: no stretch-evoked current has ever been recorded in a
     # B-type motor neuron, so there is no measured amplitude, reversal
     # potential, threshold or adaptation to anchor it. Off by default.
     propr_gain: float = 0.0
-    # Head pacemaker: an oscillating current in antiphase into the dorsal and
-    # ventral nerve-ring motor neurons. SCRIPTED, and the last scripted piece
-    # of the locomotor rhythm. The head oscillating is measured, and so is its
-    # frequency, but no measured conductance makes these cells oscillate on
-    # their own, so the oscillation is imposed and only its propagation down
-    # the body is left to the network. Amplitude is in pA.
+    # The scripted surface of locomotion, reduced to one rhythm current.
+    #
+    # WHAT IS MEASURED: B-class motor neurons are active during forward
+    # locomotion and A-class during backward, by calcium imaging in moving
+    # animals (Haspel, O'Donovan & Hart 2010 J Neurosci 30:11151; Kawano et
+    # al. 2011 Neuron 72:572), and the head is a separate oscillator (Wen et
+    # al. 2012). Undulation frequency and wavelength are measured (Cronin et
+    # al. 2005; Fang-Yen et al. 2010).
+    #
+    # WHAT IS SCRIPTED: the oscillation itself. No ventral cord motor neuron
+    # has ever been recorded during locomotion and no measured conductance
+    # makes them oscillate (docs/emergent-cpg.md), so a phase-graded sinusoid
+    # current is injected into the measured pools: DB/VB when the network
+    # commands forward, DA/VA when it commands backward, RMD/SMD for the
+    # head. Everything downstream is the calibrated junction, real muscle
+    # calcium and the shared mechanics. Amplitudes in pA.
+    cord_pacemaker_pa: float = 0.0
     head_pacemaker_pa: float = 0.0
+    # Steering: a DC dorsoventral offset into the head motor neurons, which
+    # innervate head muscle through the real junction.
+    head_steer_pa: float = 0.0
     # 0.47 Hz crawling on agar (Cronin et al. 2005); the animal runs 0.30 Hz on
     # 2% agarose and 1.76 Hz swimming (Fang-Yen et al. 2010 Table 1).
     head_pacemaker_hz: float = 0.47
+    # Calcium-to-force gain. The transfer function is unmeasured in this
+    # animal (no length-tension, no force-velocity, no calibrated
+    # calcium-to-force curve; Butler et al. 2015 say so), so the scale is fit
+    # to the measured bend amplitude of ~19-21%% BL (Cronin et al. 2005).
+    muscle_force_gain: float = 8.0
     start_adult: bool = True      # False starts as a freshly hatched L1
     # How many seconds of development pass per second of simulated behaviour.
     # Real development takes ~50 h, which nobody wants to watch in real time.
@@ -132,7 +157,10 @@ PROVENANCE = {
     "tonic_forward": "scripted",  # stands in for AVB->B tonic drive
     "command_gain": "tuned",
     "seed": "tuned",
-    "emergent_muscles": "scripted",
+    "scripted_body": "scripted",     # test fixture for the harness
+    "cord_pacemaker_pa": "scripted", # the one imposed rhythm current
+    "head_steer_pa": "scripted",
+    "muscle_force_gain": "tuned",    # fit to measured bend amplitude
     "propr_gain": "tuned",   # no stretch-evoked current ever recorded
     "head_pacemaker_pa": "scripted",  # the last imposed piece of the rhythm
     "head_pacemaker_hz": "measured",  # Cronin et al. 2005; Fang-Yen et al. 2010
@@ -204,6 +232,23 @@ class WormSimulation:
         self._build_proprioception()
         self.i_head_d = self.conn.indices(HEAD_PACEMAKER_D)
         self.i_head_v = self.conn.indices(HEAD_PACEMAKER_V)
+        # Cord pacing targets: each class ordered anterior to posterior, with
+        # a body position u in 0..1, so the imposed phase can lag with u at
+        # the measured wavelength.
+        self._pace = {}
+        for cls in ("DB", "VB", "DA", "VA"):
+            names = sorted((n for n in self.conn.names
+                            if self.conn.cell_info[n].get("vnc_class") == cls),
+                           key=lambda n: self.conn.cell_info[n]["vnc_index"])
+            idx = np.array([self.conn.idx(n) for n in names], dtype=int)
+            u = (np.arange(len(names)) + 0.5) / max(len(names), 1)
+            self._pace[cls] = (idx, u)
+        self._pace_phase = 0.0
+        # In-phase and quadrature trackers of the pacing artefact in the
+        # command balance (see step()).
+        self._rip = np.zeros(2)
+        # Pacing runs on the previous body step's drives, one dt behind.
+        self._pace_drive = (0.0, 0.0, 0.0, 1.0)  # fwd, bwd, steer, rate
 
         self.state = SimState()
         self.reset()
@@ -250,22 +295,40 @@ class WormSimulation:
         self._propr_w = (np.array(self._propr_w) if len(self._propr_w)
                          else np.zeros((0, N_SEG)))
 
-    def head_pacemaker_current(self) -> np.ndarray:
-        """Antiphase oscillating current into the head motor neurons, pA.
+    def pacemaker_current(self) -> np.ndarray:
+        """The one scripted current: a phase-graded rhythm into the measured
+        motor pools, plus a DC steering offset into the head.
 
-        The head oscillator is imposed. What is left to the network is whether
-        that oscillation travels: the body behind the head is driven only by
-        its own muscles reading their own motor neurons, which read curvature
-        in front of them, so the wavelength and wave speed are properties of
-        the neuromechanical loop rather than numbers written down anywhere.
+        Forward paces DB (dorsal) and VB (ventral) in antiphase, with phase
+        lagging along the body at the measured wavelength; backward paces
+        DA/VA with the gradient reversed. Which pool is paced, and when, is
+        the measured part (Haspel et al. 2010; Kawano et al. 2011); the
+        sinusoid is the stand-in for a rhythm generator nobody has recorded.
+        Everything it drives from there is real: release, the calibrated
+        junction, muscle calcium, force.
         """
+        cfg = self.cfg
         I = np.zeros(self.conn.n)
-        if self.cfg.head_pacemaker_pa == 0.0:
-            return I
-        phase = 2.0 * np.pi * self.cfg.head_pacemaker_hz * self.state.t
-        drive = self.cfg.head_pacemaker_pa * np.sin(phase)
-        I[self.i_head_d] = drive
-        I[self.i_head_v] = -drive
+        fwd, bwd, steer, _ = self._pace_drive
+        lam = self.body.p.wavelength_bl
+        ph = self._pace_phase
+        if cfg.cord_pacemaker_pa > 0.0:
+            net_fwd = fwd >= bwd
+            amp = cfg.cord_pacemaker_pa * (fwd if net_fwd else bwd)
+            grad = -2.0 * np.pi / lam if net_fwd else 2.0 * np.pi / lam
+            dorsal, ventral = ("DB", "VB") if net_fwd else ("DA", "VA")
+            for cls, sign in ((dorsal, 1.0), (ventral, -1.0)):
+                idx, u = self._pace[cls]
+                if idx.size:
+                    I[idx] += sign * amp * np.sin(ph + grad * u)
+        if cfg.head_pacemaker_pa > 0.0:
+            amp_h = cfg.head_pacemaker_pa * max(fwd, bwd)
+            drive = amp_h * np.sin(ph)
+            I[self.i_head_d] += drive
+            I[self.i_head_v] -= drive
+        if cfg.head_steer_pa != 0.0 and steer != 0.0:
+            I[self.i_head_d] += cfg.head_steer_pa * steer
+            I[self.i_head_v] -= cfg.head_steer_pa * steer
         return I
 
     def proprioceptive_current(self) -> np.ndarray:
@@ -327,12 +390,16 @@ class WormSimulation:
         """
         ca = self.ns.muscle_calcium()
         rest = MUSCLE_REST_ACTIVATION
-        f = np.clip((ca - rest) / (1.0 - rest), 0.0, 1.0)
+        f = np.clip(self.cfg.muscle_force_gain * (ca - rest) / (1.0 - rest),
+                    0.0, 1.0)
         d = np.array([f[r].mean() if r.size else 0.0 for r in self.ca_row_d])
         v = np.array([f[r].mean() if r.size else 0.0 for r in self.ca_row_v])
         return d, v
 
     def reset(self, x: float = 0.0, y: float = 0.0, heading: float = 0.0) -> None:
+        self._pace_phase = 0.0
+        self._pace_drive = (0.0, 0.0, 0.0, 1.0)
+        self._rip = np.zeros(2)
         self.ns.reset()
         self.body.reset(x, y, heading)
         self.state = SimState()
@@ -418,9 +485,13 @@ class WormSimulation:
         nodes = self.body.world_nodes()
         head, tail = nodes[0], nodes[-1]
 
+        # One rhythm clock for cord and head pacing, advanced per body step
+        # at the modulated rate set by the previous step's drives.
+        self._pace_phase += 2.0 * np.pi * self.body.p.freq_hz \
+            * self._pace_drive[3] * dt
         I = self.sensory.compute(self.env, head, tail, dt,
                                  amplitude=cfg.sensory_amplitude)
-        I = I + self.proprioceptive_current() + self.head_pacemaker_current()
+        I = I + self.proprioceptive_current() + self.pacemaker_current()
         sub_dt = (dt * 1000.0) / cfg.neural_substeps  # ms
         for _ in range(cfg.neural_substeps):
             self.ns.step(sub_dt, I, noise=cfg.neural_noise)
@@ -436,6 +507,22 @@ class WormSimulation:
         # junctions, and PVC in turn synapses onto AVA. Only the difference
         # says which way the animal actually goes.
         cmd_balance = bwd_cmd - fwd_cmd
+
+        # Remove the scripted current's own signature before any decision is
+        # made on the balance. The pacing current leaks into AVB and AVA
+        # through their measured gap junctions with the motor classes, so the
+        # balance oscillates at the pacing frequency; that component is our
+        # stand-in's artefact, its phase is known exactly, and leaving it in
+        # buries every real signal (a touch deviation is the same size as the
+        # ripple). Track the in-phase and quadrature amplitudes with a slow
+        # filter and subtract the projection. Sensory events are not
+        # phase-locked to the pacing clock, so they pass through.
+        if self.cfg.cord_pacemaker_pa > 0.0 or self.cfg.head_pacemaker_pa > 0.0:
+            basis = np.array([np.sin(self._pace_phase),
+                              np.cos(self._pace_phase)])
+            a_r = 1.0 - np.exp(-dt / 4.0)
+            self._rip += a_r * (2.0 * cmd_balance * basis - self._rip)
+            cmd_balance = cmd_balance - float(self._rip @ basis)
 
         # Slow-adapting baseline. Frozen while reversing so the reversal's own
         # command activity cannot chase the threshold up and cut itself short.
@@ -492,6 +579,11 @@ class WormSimulation:
         nmj = float(np.clip(min(g.nt_scale("Acetylcholine"),
                                 max(g.global_scale("chemical_synapse"), 0.0)),
                             0.0, 1.3))
+        # Pacing bypasses this gate on purpose: in the paced path unc-13 and
+        # unc-17 act through the real junction, whose presynaptic release is
+        # already scaled per cell by the genome, and gating the current too
+        # would count the same lesion twice.
+        fwd_pace, bwd_pace = forward, backward
         forward *= nmj
         backward *= nmj
 
@@ -505,6 +597,8 @@ class WormSimulation:
         slow *= self.life.locomotion_scale()
         forward *= slow
         backward *= slow
+        fwd_pace *= slow
+        bwd_pace *= slow
         # Drive alone is not enough: above a total of 1.0 the oscillator's
         # amplitude term saturates, so a 20% cut in drive can vanish entirely.
         # Slowing on food and senescent decline are reductions in locomotion
@@ -512,9 +606,15 @@ class WormSimulation:
         rate_scale = slow
 
         head_bias = self._head_bias(act, turn_cmd)
+        # Rhythm rate for the NEXT step's pacing: the same modulation the
+        # scripted oscillator used, so arousal, food slowing and total drive
+        # reach the frequency identically in both paths.
+        rate = float(np.clip(arousal, 0.3, 2.0)) * max(rate_scale, 0.05) \
+            * (0.35 + 0.65 * min(fwd_pace + bwd_pace, 1.0))
+        self._pace_drive = (fwd_pace, bwd_pace, head_bias, rate)
 
         self.body.p.curvature_gain = BodyParams.curvature_gain * np.clip(bend, 0.3, 2.0)
-        if self.cfg.emergent_muscles:
+        if not self.cfg.scripted_body:
             # Shape follows the muscle cells the connectome actually drives.
             d, v = self.muscle_force()
             self.body.drive_from_muscles(dt, d, v)
