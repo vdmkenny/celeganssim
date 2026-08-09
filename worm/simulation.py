@@ -669,6 +669,11 @@ class WormSimulation:
         self.body.drive_from_muscles(dt, d, v)
         self.muscle_activation = np.zeros(self.conn.n)
         self.muscle_activation[self.ns._muscle_idx] = self.ns.muscle_calcium()
+        # A dead muscle displays as dead. Ablation clamps the cell at rest,
+        # which would otherwise render at the same mid-brightness as a live
+        # idle cell and make the lesion invisible in the viewer.
+        if self.ns._ablated_idx.size:
+            self.muscle_activation[self.ns._ablated_idx] = 0.0
 
         prev = self.body.X.copy()
         self.body.step_motion(dt, drag_ratio=self.env.drag_ratio)
