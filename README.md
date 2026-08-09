@@ -37,7 +37,7 @@ anything.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 38 checks against published measurements, in parallel
+worm validate         # 39 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -215,7 +215,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 38 checks: 25 behavioural, 13 consistency, gaps as expected failures |
+| `worm/validate.py` | 39 checks: 26 behavioural, 13 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry, provenance tags enforced by a check |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -243,9 +243,9 @@ rather than making it, so are not modelled as GABAergic.
 
 ## Validation
 
-`worm validate` runs 37 checks against published measurements: 25 behavioural
+`worm validate` runs 37 checks against published measurements: 26 behavioural
 (the animal is run and measured) and 12 consistency checks (parameter and data
-invariants). 28 pass. Nine are registered expected failures, each naming the
+invariants). 29 pass. Ten are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
@@ -310,7 +310,16 @@ potentials, developmental timings, body sizes, brood size, lifespan.
   sit at their solved resting equilibrium and nothing displaces them.
   `worm validate` carries this as a registered expected failure.
   [docs/emergent-cpg.md](docs/emergent-cpg.md) records what an emergent version
-  needs, what was tried to build one, and why each attempt failed. The cause is
+  needs, what was tried to build one, and why each attempt failed. An opt-in
+  paced mode (`SimConfig(scripted_body=False, cord_pacemaker_pa=100)`) injects
+  the rhythm into the measured motor pools instead and carries locomotion
+  through the fully real chain, release to junction to muscle calcium to
+  force, at 0.295 mm/s and 19.2% BL against a measured 19.3%. It is not the
+  default because the pacing current leaks into the command interneurons
+  through their measured gap junctions and destroys touch discrimination:
+  under pacing, mec-4 reads as wild type on every detector tried. Keeping the
+  script at body level is a measured trade for readable assays, not a
+  preference. The cause is
   now known and is structural rather than a matter of tuning or of missing
   wiring: with each cell's threshold solved to its own resting potential, a
   synapse spans only s_eq to s_max, so a muscle's driven potential is bounded
