@@ -40,6 +40,18 @@ MEASURED_REST: dict[str, float] = {
 }
 
 
+# The six touch receptor neurons. Habituation of the tap-withdrawal response
+# lives at their OUTPUT synapses, not in the receptor current: the decrement
+# is synaptic depression at the sensory-to-interneuron connections (Wicks &
+# Rankin 1997 Behav Neurosci 111:342; Rankin, Beck & Chiba 1990 Behav Brain
+# Res 37:89 for the behavioural decrement and its recovery over minutes).
+# Scoping depression to these cells leaves every other synapse static, so
+# single-poke calibrations are untouched and gait cannot be collaterally
+# damaged, which is the documented failure of applying depression
+# network-wide (docs/emergent-cpg.md, release-cooperativity branch).
+TOUCH_RECEPTOR_NEURONS = ("ALML", "ALMR", "AVM", "PLML", "PLMR", "PVM")
+
+
 class NeuralParams:
     """Units: mV, nS, pF, ms.
 
@@ -166,6 +178,11 @@ class NeuralParams:
     k_h_muscle = 7.0        # its steepness, mV
     tau_h_muscle = 10.0     # its time constant, ms
 
+    # Touch-cell release depression. Rate is fitted to the classic decrement,
+    # about half the response gone after ten taps at a 10 s interstimulus
+    # interval (Rankin et al. 1990); recovery runs over minutes.
+    trn_dep_rate = 2.3e-4     # depression per ms of above-rest release
+    trn_dep_recovery_ms = 90000.0
     beta = 0.125      # sigmoid steepness, 1/mV
     a_r = (1.0 / 1.5) / 1000.0   # synaptic rise rate, 1/ms  (0.667 s^-1)
     a_d = (5.0 / 1.5) / 1000.0   # synaptic decay rate, 1/ms (3.33 s^-1)
@@ -227,6 +244,8 @@ PROVENANCE = {
     "V_h_muscle": "tuned",
     "k_h_muscle": "tuned",
     "tau_h_muscle": "tuned",
+    "trn_dep_rate": "tuned",         # fit to Rankin et al. 1990 decrement
+    "trn_dep_recovery_ms": "tuned",  # recovery over minutes, same source
     "beta": "published",    # Kunert et al. 2014
     "a_r": "published",     # Wicks/Kunert, 1.5x time rescale
     "a_d": "published",
@@ -307,6 +326,8 @@ class NervousSystem:
         for i in np.where(conn.is_muscle)[0]:
             self._rest_targets[int(i)] = self.p.E_muscle
 
+        self._trn_idx = np.array([conn.index[n] for n in TOUCH_RECEPTOR_NEURONS
+                                  if n in conn.index], dtype=int)
         self._apply_genetics()
         self.reset()
 
@@ -461,6 +482,8 @@ class NervousSystem:
         self.V_th = self._solve_thresholds()
         self.V = self.V_th.copy()
         self.s = np.full(self.n, self.s_eq)
+        # Touch-cell output depression, 1 = fresh. See TOUCH_RECEPTOR_NEURONS.
+        self.dep = np.ones(self.n)
         # Muscle calcium, as a two-stage cascade so the impulse response is
         # the measured biexponential. Starts at the resting activation, which
         # is 0.5 because each threshold is solved to its own resting potential.
@@ -517,7 +540,7 @@ class NervousSystem:
         Gg = self.Gg_eff * p.g_gap
         Gs = self.Gs_eff * self.g_syn_row
 
-        gs_active = Gs * s[np.newaxis, :]
+        gs_active = Gs * (s * self.dep)[np.newaxis, :]
         # Coefficient of V_i in its own current balance, and everything else.
         G_tot = self.G_leak + Gg.sum(axis=1) + gs_active.sum(axis=1)
         drive = (self.G_leak * self.E_leak + Gg @ V
@@ -559,6 +582,12 @@ class NervousSystem:
             self.w_m = w_inf + (self.w_m - w_inf) * np.exp(-dt / p.tau_K_muscle)
 
         phi = self._sigmoid(p.beta * (self.V - self.V_th))
+        if self._trn_idx.size:
+            t = self._trn_idx
+            excess = np.maximum(phi[t] - 0.5, 0.0) * 2.0
+            self.dep[t] += dt * ((1.0 - self.dep[t]) / p.trn_dep_recovery_ms
+                                 - p.trn_dep_rate * excess * self.dep[t])
+            np.clip(self.dep[t], 0.05, 1.0, out=self.dep[t])
         rate = p.a_r * phi + p.a_d
         s_inf = p.a_r * phi / rate
         self.s = np.clip(s_inf + (s - s_inf) * np.exp(-dt * rate), 0.0, 1.0)
