@@ -32,6 +32,28 @@ HEAD_VENTRAL = ["SMDVL", "SMDVR", "RMDVL", "RMDVR"]
 # that is where it produces no force.
 MUSCLE_REST_ACTIVATION = 0.5
 
+# Wave-algebra constants shared by the two script levels (the body oscillator
+# and the muscle pacer), so both express the same wave and the GABA couplings
+# keep their validated magnitudes whichever level carries the script.
+# PACE_EXC is the excitation scale fitted long ago to the ~19% BL bend
+# amplitude of Cronin et al. 2005; PACE_TOTAL_MAX is the drive ceiling above
+# which the oscillator's amplitude term saturates.
+PACE_EXC = 0.85
+PACE_TOTAL_MAX = 1.5
+# Steering reaches the head and neck rows only: the anterior 16 muscles are
+# innervated by the nerve ring alone and the next 16 by ring and cord
+# together (White et al. 1986), which is rows 1-8 of 24, and head steering
+# through SMD/RMD acts there. As a fraction of body length:
+HEAD_STEER_EXTENT_BL = 8.0 / 24.0
+# Time-mean of the rectified wave clip(sin)+ is 1/pi. Subtracting exc times
+# this from each muscle's target makes the GABA-intact pattern inject zero
+# net current, so a wild-type animal neither shortens nor tonically
+# contracts; when GABA is lost the pattern's mean rises above this baseline
+# and the excess is genuine co-contraction, which the mechanics turn into
+# the shrinker's shortening (McIntire, Jorgensen, Kaplan & Horvitz 1993
+# Nature 364:337).
+RECTIFIED_WAVE_MEAN = 1.0 / np.pi
+
 # Proprioceptive coupling length, as a fraction of body length. Motor activity
 # in a posterior region requires the active bending of an anterior region
 # extending ~200 um, measured on a ~1 mm adult in a microfluidic channel that
@@ -88,47 +110,22 @@ class SimConfig:
     tonic_forward: float = 0.62   # baseline AVB drive -> spontaneous forward
     command_gain: float = 9.0
     seed: int = 0
-    # Drive the body from the scripted ventral-cord oscillator (default)
-    # rather than from the muscle cells. This is a MEASURED design decision,
-    # not a preference: pacing the motor neurons produces locomotion through
-    # the fully real chain (junction, calcium, force; see the paced-gait
-    # check), but the pacing current leaks into AVB and AVA through their
-    # measured gap junctions and corrupts the command readout. Under pacing,
-    # mec-4 is indistinguishable from wild type on every detector tried
-    # (level, cycle-averaged, signed transient), so touch discrimination,
-    # which is what the assays exist for, is lost. Body-level scripting keeps
-    # the network quiet enough to read; neuron-level pacing is the opt-in
-    # below.
-    scripted_body: bool = True
     # Strength of the proprioceptive current, pA per unit normalised curvature.
     # A free parameter: no stretch-evoked current has ever been recorded in a
     # B-type motor neuron, so there is no measured amplitude, reversal
     # potential, threshold or adaptation to anchor it. Off by default.
     propr_gain: float = 0.0
-    # The scripted surface of locomotion, reduced to one rhythm current.
-    #
-    # WHAT IS MEASURED: B-class motor neurons are active during forward
-    # locomotion and A-class during backward, by calcium imaging in moving
-    # animals (Haspel, O'Donovan & Hart 2010 J Neurosci 30:11151; Kawano et
-    # al. 2011 Neuron 72:572), and the head is a separate oscillator (Wen et
-    # al. 2012). Undulation frequency and wavelength are measured (Cronin et
-    # al. 2005; Fang-Yen et al. 2010).
-    #
-    # WHAT IS SCRIPTED: the oscillation itself. No ventral cord motor neuron
-    # has ever been recorded during locomotion and no measured conductance
-    # makes them oscillate (docs/emergent-cpg.md), so a phase-graded sinusoid
-    # current is injected into the measured pools: DB/VB when the network
-    # commands forward, DA/VA when it commands backward, RMD/SMD for the
-    # head. Everything downstream is the calibrated junction, real muscle
-    # calcium and the shared mechanics. Amplitudes in pA.
-    cord_pacemaker_pa: float = 0.0
-    head_pacemaker_pa: float = 0.0
-    # Steering: a DC dorsoventral offset into the head motor neurons, which
-    # innervate head muscle through the real junction.
-    head_steer_pa: float = 0.0
-    # 0.47 Hz crawling on agar (Cronin et al. 2005); the animal runs 0.30 Hz on
-    # 2% agarose and 1.76 Hz swimming (Fang-Yen et al. 2010 Table 1).
-    head_pacemaker_hz: float = 0.47
+    # Muscle-level pacing: the compromise mode. The same wave algebra the
+    # body oscillator uses, delivered as per-muscle currents into the 95 real
+    # muscle cells instead of as prescribed curvature. The script couples in
+    # at the end organ: downstream of every neuron the assays read, so the
+    # command balance stays clean, and upstream of the mechanics, so muscles
+    # are load-bearing: ablating one removes its force, and the body is
+    # driven by real muscle calcium with measured kinetics. Motor-gene knobs
+    # (nmj gate, gaba cross-inhibition) keep their validated couplings by
+    # gating this current exactly as they gated the oscillator. Amplitude in
+    # pA per muscle, fitted to the measured bend amplitude.
+    muscle_pacemaker_pa: float = 40.0
     # Calcium-to-force gain. The transfer function is unmeasured in this
     # animal (no length-tension, no force-velocity, no calibrated
     # calcium-to-force curve; Butler et al. 2015 say so), so the scale is fit
@@ -157,13 +154,9 @@ PROVENANCE = {
     "tonic_forward": "scripted",  # stands in for AVB->B tonic drive
     "command_gain": "tuned",
     "seed": "tuned",
-    "scripted_body": "scripted",     # test fixture for the harness
-    "cord_pacemaker_pa": "scripted", # the one imposed rhythm current
-    "head_steer_pa": "scripted",
+    "muscle_pacemaker_pa": "scripted",  # the wave, delivered at the end organ
     "muscle_force_gain": "tuned",    # fit to measured bend amplitude
     "propr_gain": "tuned",   # no stretch-evoked current ever recorded
-    "head_pacemaker_pa": "scripted",  # the last imposed piece of the rhythm
-    "head_pacemaker_hz": "measured",  # Cronin et al. 2005; Fang-Yen et al. 2010
     "start_adult": "tuned",
     "life_speedup": "tuned",      # display convenience, not biology
 }
@@ -232,21 +225,17 @@ class WormSimulation:
         self._build_proprioception()
         self.i_head_d = self.conn.indices(HEAD_PACEMAKER_D)
         self.i_head_v = self.conn.indices(HEAD_PACEMAKER_V)
-        # Cord pacing targets: each class ordered anterior to posterior, with
-        # a body position u in 0..1, so the imposed phase can lag with u at
-        # the measured wavelength.
-        self._pace = {}
-        for cls in ("DB", "VB", "DA", "VA"):
-            names = sorted((n for n in self.conn.names
-                            if self.conn.cell_info[n].get("vnc_class") == cls),
-                           key=lambda n: self.conn.cell_info[n]["vnc_index"])
-            idx = np.array([self.conn.idx(n) for n in names], dtype=int)
-            u = (np.arange(len(names)) + 0.5) / max(len(names), 1)
-            self._pace[cls] = (idx, u)
+        # Muscle pacing geometry: body position u and side per muscle cell,
+        # from the anatomical row (1 anterior to 24 posterior).
+        mus = [n for n in self.conn.names
+               if self.conn.cell_info[n]["kind"] == "muscle"]
+        mx = max(self.conn.cell_info[n]["row"] for n in mus)
+        self._mus_idx = np.array([self.conn.idx(n) for n in mus], dtype=int)
+        self._mus_u = np.array([(self.conn.cell_info[n]["row"] - 0.5) / mx
+                                for n in mus])
+        self._mus_dorsal = np.array(
+            [self.conn.cell_info[n]["side"] == "dorsal" for n in mus])
         self._pace_phase = 0.0
-        # In-phase and quadrature trackers of the pacing artefact in the
-        # command balance (see step()).
-        self._rip = np.zeros(2)
         # Pacing runs on the previous body step's drives, one dt behind.
         self._pace_drive = (0.0, 0.0, 0.0, 1.0)  # fwd, bwd, steer, rate
 
@@ -295,40 +284,58 @@ class WormSimulation:
         self._propr_w = (np.array(self._propr_w) if len(self._propr_w)
                          else np.zeros((0, N_SEG)))
 
-    def pacemaker_current(self) -> np.ndarray:
-        """The one scripted current: a phase-graded rhythm into the measured
-        motor pools, plus a DC steering offset into the head.
+    def muscle_pacemaker_current(self, fwd: float, bwd: float,
+                                 gaba: float, head_bias: float) -> np.ndarray:
+        """THE scripted surface: the locomotor wave, as per-muscle currents.
 
-        Forward paces DB (dorsal) and VB (ventral) in antiphase, with phase
-        lagging along the body at the measured wavelength; backward paces
-        DA/VA with the gradient reversed. Which pool is paced, and when, is
-        the measured part (Haspel et al. 2010; Kawano et al. 2011); the
-        sinusoid is the stand-in for a rhythm generator nobody has recorded.
-        Everything it drives from there is real: release, the calibrated
-        junction, muscle calcium, force.
+        No published model produces this rhythm from the connectome, and no
+        ventral cord motor neuron has ever been recorded during locomotion
+        (docs/emergent-cpg.md), so the wave is imposed. It is imposed at the
+        END ORGAN: downstream of every neuron the assays read, which keeps
+        the command balance clean (imposing it on the motor neurons was tried
+        and measured out: their gap junctions onto AVA/AVB made mec-4 read as
+        wild type), and upstream of the mechanics, so muscles are load
+        bearing, ablation has consequences, and the body runs on real muscle
+        calcium.
+
+        The algebra per muscle is the validated one: phasic one-sided
+        cholinergic excitation, contralateral GABAergic inhibition scaled by
+        what genetics leave (Wicks & Rankin-era circuit logic; McIntire et
+        al. 1993 Nature 364:337 for the shrinker), a nerve-ring steering bias
+        on the head rows (White et al. 1986). Wave direction follows the
+        command state, matching B-class activity in forward and A-class in
+        backward locomotion (Haspel, O'Donovan & Hart 2010 J Neurosci
+        30:11151; Kawano et al. 2011 Neuron 72:572); frequency and wavelength
+        are the measured gait (Cronin et al. 2005: 0.47 Hz, 0.62 BL).
+
+        The current is (target - rest) so an undriven muscle sits at its
+        measured resting potential, and genetics act exactly as they did on
+        the oscillator: unc-13/unc-17 gate the drive, GABA loss turns
+        alternation into co-contraction, and the shrinker follows through the
+        real co-contraction term in the mechanics.
         """
         cfg = self.cfg
         I = np.zeros(self.conn.n)
-        fwd, bwd, steer, _ = self._pace_drive
-        lam = self.body.p.wavelength_bl
-        ph = self._pace_phase
-        if cfg.cord_pacemaker_pa > 0.0:
-            net_fwd = fwd >= bwd
-            amp = cfg.cord_pacemaker_pa * (fwd if net_fwd else bwd)
-            grad = -2.0 * np.pi / lam if net_fwd else 2.0 * np.pi / lam
-            dorsal, ventral = ("DB", "VB") if net_fwd else ("DA", "VA")
-            for cls, sign in ((dorsal, 1.0), (ventral, -1.0)):
-                idx, u = self._pace[cls]
-                if idx.size:
-                    I[idx] += sign * amp * np.sin(ph + grad * u)
-        if cfg.head_pacemaker_pa > 0.0:
-            amp_h = cfg.head_pacemaker_pa * max(fwd, bwd)
-            drive = amp_h * np.sin(ph)
-            I[self.i_head_d] += drive
-            I[self.i_head_v] -= drive
-        if cfg.head_steer_pa != 0.0 and steer != 0.0:
-            I[self.i_head_d] += cfg.head_steer_pa * steer
-            I[self.i_head_v] -= cfg.head_steer_pa * steer
+        if cfg.muscle_pacemaker_pa <= 0.0:
+            return I
+        net = fwd - bwd
+        total = min(fwd + bwd, PACE_TOTAL_MAX)
+        grad = (-1.0 if net >= 0 else 1.0) * 2.0 * np.pi \
+            / self.body.p.wavelength_bl
+        wave = np.sin(self._pace_phase + grad * self._mus_u)
+        exc = PACE_EXC * min(total, 1.0)
+        inh = exc * float(np.clip(gaba, 0.0, 1.0))
+        d_target = np.clip(exc * (0.5 + 0.5 * wave) - inh * (0.5 - 0.5 * wave),
+                           0.0, 1.0)
+        v_target = np.clip(exc * (0.5 - 0.5 * wave) - inh * (0.5 + 0.5 * wave),
+                           0.0, 1.0)
+        target = np.where(self._mus_dorsal, d_target, v_target)
+        bias = head_bias * np.clip(1.0 - self._mus_u / HEAD_STEER_EXTENT_BL,
+                                   0.0, 1.0)
+        target = np.clip(target + np.where(self._mus_dorsal, bias, -bias),
+                         0.0, 1.0)
+        I[self._mus_idx] = cfg.muscle_pacemaker_pa \
+            * (target - exc * RECTIFIED_WAVE_MEAN)
         return I
 
     def proprioceptive_current(self) -> np.ndarray:
@@ -399,7 +406,7 @@ class WormSimulation:
     def reset(self, x: float = 0.0, y: float = 0.0, heading: float = 0.0) -> None:
         self._pace_phase = 0.0
         self._pace_drive = (0.0, 0.0, 0.0, 1.0)
-        self._rip = np.zeros(2)
+        self._pace_gated = (0.0, 0.0, 1.0, 0.0)
         self.ns.reset()
         self.body.reset(x, y, heading)
         self.state = SimState()
@@ -491,7 +498,8 @@ class WormSimulation:
             * self._pace_drive[3] * dt
         I = self.sensory.compute(self.env, head, tail, dt,
                                  amplitude=cfg.sensory_amplitude)
-        I = I + self.proprioceptive_current() + self.pacemaker_current()
+        I = I + self.proprioceptive_current()
+        I = I + self.muscle_pacemaker_current(*self._pace_gated)
         sub_dt = (dt * 1000.0) / cfg.neural_substeps  # ms
         for _ in range(cfg.neural_substeps):
             self.ns.step(sub_dt, I, noise=cfg.neural_noise)
@@ -507,22 +515,6 @@ class WormSimulation:
         # junctions, and PVC in turn synapses onto AVA. Only the difference
         # says which way the animal actually goes.
         cmd_balance = bwd_cmd - fwd_cmd
-
-        # Remove the scripted current's own signature before any decision is
-        # made on the balance. The pacing current leaks into AVB and AVA
-        # through their measured gap junctions with the motor classes, so the
-        # balance oscillates at the pacing frequency; that component is our
-        # stand-in's artefact, its phase is known exactly, and leaving it in
-        # buries every real signal (a touch deviation is the same size as the
-        # ripple). Track the in-phase and quadrature amplitudes with a slow
-        # filter and subtract the projection. Sensory events are not
-        # phase-locked to the pacing clock, so they pass through.
-        if self.cfg.cord_pacemaker_pa > 0.0 or self.cfg.head_pacemaker_pa > 0.0:
-            basis = np.array([np.sin(self._pace_phase),
-                              np.cos(self._pace_phase)])
-            a_r = 1.0 - np.exp(-dt / 4.0)
-            self._rip += a_r * (2.0 * cmd_balance * basis - self._rip)
-            cmd_balance = cmd_balance - float(self._rip @ basis)
 
         # Slow-adapting baseline. Frozen while reversing so the reversal's own
         # command activity cannot chase the threshold up and cut itself short.
@@ -612,21 +604,15 @@ class WormSimulation:
         rate = float(np.clip(arousal, 0.3, 2.0)) * max(rate_scale, 0.05) \
             * (0.35 + 0.65 * min(fwd_pace + bwd_pace, 1.0))
         self._pace_drive = (fwd_pace, bwd_pace, head_bias, rate)
+        self._pace_gated = (forward, backward,
+                            float(np.clip(gaba, 0.0, 1.0)), head_bias)
 
         self.body.p.curvature_gain = BodyParams.curvature_gain * np.clip(bend, 0.3, 2.0)
-        if not self.cfg.scripted_body:
-            # Shape follows the muscle cells the connectome actually drives.
-            d, v = self.muscle_force()
-            self.body.drive_from_muscles(dt, d, v)
-            self.muscle_activation = np.zeros(self.conn.n)
-            self.muscle_activation[self.ns._muscle_idx] = self.ns.muscle_calcium()
-        else:
-            self.body.step_oscillator(
-                dt, forward_drive=forward, backward_drive=backward,
-                gaba_scale=float(np.clip(gaba, 0.0, 1.0)),
-                head_bias=head_bias,
-                arousal=float(np.clip(arousal, 0.3, 2.0) * max(rate_scale, 0.05)))
-            self._drive_muscles()
+        # Shape follows the muscle cells: real calcium, measured kinetics.
+        d, v = self.muscle_force()
+        self.body.drive_from_muscles(dt, d, v)
+        self.muscle_activation = np.zeros(self.conn.n)
+        self.muscle_activation[self.ns._muscle_idx] = self.ns.muscle_calcium()
 
         prev = self.body.X.copy()
         self.body.step_motion(dt, drag_ratio=self.env.drag_ratio)
@@ -732,20 +718,6 @@ class WormSimulation:
         if self.state.behavior == "reversal":
             bias *= self.genome.global_scale("head_suppression")
         return float(bias)
-
-    def _drive_muscles(self) -> None:
-        """Write the commanded activation back onto the real muscle cells.
-
-        The body model runs on 24 segment rows, but the connectome carries all
-        95 individually named body-wall muscles, so the visualiser and any
-        readout can show genuine per-muscle activity.
-        """
-        self.muscle_activation = np.zeros(self.conn.n)
-        for seg in range(N_SEG):
-            for i in self.row_d[seg]:
-                self.muscle_activation[i] = self.body.dorsal[seg]
-            for i in self.row_v[seg]:
-                self.muscle_activation[i] = self.body.ventral[seg]
 
     # -- reporting ------------------------------------------------------
     def telemetry(self, forward: float, backward: float, head_bias: float) -> dict:

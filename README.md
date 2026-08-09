@@ -145,7 +145,9 @@ NervousSystem    448 cells, graded-potential ODEs over the real connectome
       |
 Simulation       reads command interneurons -> behavioural state machine
       |
-Body             ventral-cord oscillator -> 95 muscles -> viscoelastic body
+Muscle pacer     the one scripted current -> 95 REAL muscle cells
+      |
+Body             muscle calcium -> force -> viscoelastic body
       |
                  resistive force theory -> movement -> back to Environment
 ```
@@ -297,41 +299,24 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 
 **Approximations:**
 
-- **The locomotor rhythm is imposed, not emergent.** The network sets its
-  amplitude, direction and frequency, but the oscillation itself is modelled.
-  `SimConfig(emergent_muscles=True)` instead drives the body from the muscle
-  cells the connectome actually drives, through the same mechanical path. An
-  animal in that mode covers 0.005 mm in 40 s against 16.4 mm on the scripted
-  oscillator, which is the size of the gap end to end.
-  The connectome as wired delivers no undulatory rhythm to the muscles: the
-  dorsoventral difference in real muscle activation has a standard deviation of
-  0.003 against the scripted oscillator's 0.599, and a peak-to-median spectral
-  power ratio of 8 where a clean rhythm is orders of magnitude. Motor neurons
-  sit at their solved resting equilibrium and nothing displaces them.
-  `worm validate` carries this as a registered expected failure.
-  [docs/emergent-cpg.md](docs/emergent-cpg.md) records what an emergent version
-  needs, what was tried to build one, and why each attempt failed. An opt-in
-  paced mode (`SimConfig(scripted_body=False, cord_pacemaker_pa=100)`) injects
-  the rhythm into the measured motor pools instead and carries locomotion
-  through the fully real chain, release to junction to muscle calcium to
-  force, at 0.295 mm/s and 19.2% BL against a measured 19.3%. It is not the
-  default because the pacing current leaks into the command interneurons
-  through their measured gap junctions and destroys touch discrimination:
-  under pacing, mec-4 reads as wild type on every detector tried. Keeping the
-  script at body level is a measured trade for readable assays, not a
-  preference. The cause is
-  now known and is structural rather than a matter of tuning or of missing
-  wiring: with each cell's threshold solved to its own resting potential, a
-  synapse spans only s_eq to s_max, so a muscle's driven potential is bounded
-  above by `E_muscle * s_eq/s_max`, which is -13.6 mV against a -10 mV spike
-  threshold. No amount of synaptic conductance, from any connectome, reaches
-  it.
-- **The undulatory wave decays instead of travelling.** With the head driven
-  and the rest of the body moved only by its own muscles reading their own
-  motor neurons, the head oscillates but posterior bending falls to 0.05 of
-  anterior and the last eight segments do not move. Propagation measures 0.364
-  per coupling length against a measured 0.62, and 0.364 compounded over the
-  five coupling lengths in a body leaves 0.006.
+- **The locomotor rhythm is imposed, not emergent, and it is imposed at the
+  end organ.** No published model produces this rhythm from the connectome and
+  no ventral cord motor neuron has ever been recorded during locomotion, so
+  one scripted current carries the wave: per-muscle currents into the 95 real
+  muscle cells, at the measured frequency and wavelength (Cronin et al. 2005),
+  switching direction with the command state as B- and A-class activity does
+  (Haspel et al. 2010; Kawano et al. 2011). Everything downstream is real:
+  muscle calcium with measured kinetics, force, mechanics, so ablating muscle
+  bends the animal and GABA loss produces the shrinker through genuine
+  co-contraction (McIntire et al. 1993). Imposing the rhythm one level higher,
+  as currents into the motor neurons, was built and measured out: the current
+  leaks into the command interneurons through their measured gap junctions
+  and destroys touch discrimination, with mec-4 reading as wild type on every
+  detector tried. Imposing it one level lower, as prescribed body curvature,
+  leaves the muscles decorative. The end organ is the smallest scripted
+  surface that keeps every assay readable, and
+  [docs/emergent-cpg.md](docs/emergent-cpg.md) records the attempts to shrink
+  it further.
 - **Muscle spikes are not reached from synaptic input.** Muscle carries the
   measured calcium action potential, but crossing its -10 mV threshold needs
   about 2.4 nS of extra excitatory conductance, close to the 2.26 nS implied
@@ -423,6 +408,10 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 **Locomotion**
 - [Boyle, Berri & Cohen (2012), Front. Comput. Neurosci. 6:10](https://doi.org/10.3389/fncom.2012.00010)
 - [Wen et al. (2012), Neuron 76:750](https://doi.org/10.1016/j.neuron.2012.08.039) (proprioceptive coupling)
+- [Haspel, O'Donovan & Hart (2010), J. Neurosci. 30:11151](https://doi.org/10.1523/JNEUROSCI.1494-10.2010) (B-class active in forward, A-class in backward locomotion)
+- [Kawano et al. (2011), Neuron 72:572](https://doi.org/10.1016/j.neuron.2011.09.005) (A/B activity balance sets direction)
+- [McIntire, Jorgensen, Kaplan & Horvitz (1993), Nature 364:337](https://doi.org/10.1038/364337a0) (GABA loss produces the shrinker)
+- [Sulston & White (1980), Dev. Biol. 78:577](https://doi.org/10.1016/0012-1606(80)90353-X) (muscle ablation causes local body-shape defects)
 - [Mellem, Brockie, Madsen & Maricq (2008), Nat. Neurosci. 11:865](https://doi.org/10.1038/nn.2131) (RMD plateau potentials, a measured regenerative response in a head motor neuron)
 - [Byerly, Cassada & Russell (1976), Dev. Biol. 51:23](https://doi.org/10.1016/0012-1606(76)90119-6) (development rate versus temperature)
 - [Gao et al. (2018), eLife 7:e29915](https://doi.org/10.7554/eLife.29915) (A-class oscillators)

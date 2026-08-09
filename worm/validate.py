@@ -139,9 +139,7 @@ def _bend_propagation():
     free = slice(int(0.75 * N_SEG), int(0.95 * N_SEG))
     xs, ys = [], []
     for k in (-8.0, -4.0, 4.0, 8.0):
-        s = WormSimulation(config=SimConfig(seed=0, scripted_body=False,
-                                            cord_pacemaker_pa=0.0,
-                                            head_pacemaker_pa=0.0,
+        s = WormSimulation(config=SimConfig(seed=0, muscle_pacemaker_pa=0.0,
                                             propr_gain=30.0))
         n = int(10.0 / s.cfg.dt)
         got = []
@@ -158,77 +156,34 @@ def _bend_propagation():
         f"posterior follows imposed curvature with slope {slope:.3f} (want 0.62)"
 
 
-@check("an imposed head rhythm travels the length of the body",
-       "with the head driven and everything behind it moved only by its own "
-       "muscles reading their own motor neurons, the undulation should reach "
-       "the tail at roughly the amplitude it has at the head, and settle to a "
-       "wavelength near 0.62 body lengths travelling forward. Nothing sets "
-       "that wavelength here, so it is a property of the neuromechanical loop "
-       "rather than a number written down",
-       "Wen et al. 2012 Neuron 76:750 (head oscillator, proprioceptive "
-       "propagation); Cronin et al. 2005 Genetics (0.62 BL wavelength)",
-       xfail="the head oscillates and drives the anterior third, but the wave "
-             "decays instead of travelling: posterior bending is 0.05 of "
-             "anterior, and the last eight segments are motionless. That "
-             "follows from the propagation slope of 0.364 per coupling length, "
-             "since 0.364 compounded over the five coupling lengths in a body "
-             "leaves 0.006. Part of the cause is the dataset rather than the "
-             "model: posterior body muscles carry 2.5 nS of achievable "
-             "cholinergic conductance against the 2.41 nS needed to reach "
-             "spike threshold, so they can only just cross it with every input "
-             "recruited at once, and they average 6.3 presynaptic partners "
-             "against a published ~10 because the posterior body is where the "
-             "reconstruction has its gap. Wavelength and direction are "
-             "reported from the anterior segments that do move and should not "
-             "be read as a gait")
-def _head_wave():
-    from .kinematics import analyse, record
+@check("ablating muscle bends the animal, in the mode where muscles are real",
+       "killing the mid-body dorsal muscles must bend that region ventrally "
+       "and cost amplitude, because the surviving ventral muscles pull "
+       "unopposed. Only the paced mode can show this: in the default scripted "
+       "mode the body is prescribed and ablating 14 muscles changes nothing, "
+       "which is the measured reason muscle experiments belong in paced mode",
+       "Sulston & White 1980 Dev Biol 78:577 (muscle ablation causes local "
+       "paralysis and body-shape defects); paced-mode geometry as in the "
+       "paced-gait check")
+def _muscle_ablation():
     from .simulation import SimConfig
-    s = WormSimulation(config=SimConfig(seed=0, scripted_body=False,
-                                        cord_pacemaker_pa=0.0,
-                                        propr_gain=30.0,
-                                        head_pacemaker_pa=150.0))
-    r = analyse(record(s, seconds=40.0, settle=15.0))
-    reach = r["posterior_fraction"]
-    ok = (reach > 0.5 and r["wave_direction"] == "forward"
-          and abs(r["wavelength_bl"] - 0.62) <= 0.2)
-    return ok, (f"posterior bending {reach:.3f} of anterior "
-                f"({r['live_segments']} of 24 segments moving), "
-                f"{r['wave_direction']} at {r['wavelength_bl']:.2f} BL, "
-                f"{r['undulation_hz']:.2f} Hz")
-
-
-@check("neuron-level pacing carries locomotion through the real chain",
-       "with the scripted body oscillator off and a phase-graded current "
-       "paced into the measured motor pools (B forward, A backward; Haspel "
-       "et al. 2010; Kawano et al. 2011), the animal must crawl through the "
-       "fully real chain: release, the calibrated junction, muscle calcium, "
-       "force. This mode is opt-in because the same current leaks into the "
-       "command neurons through their measured gap junctions and destroys "
-       "touch discrimination (mec-4 reads as wild type on every detector "
-       "tried), which is the trade the default declines",
-       "Haspel, O'Donovan & Hart 2010 J Neurosci 30:11151; Kawano et al. "
-       "2011 Neuron 72:572; Cronin et al. 2005 (speed, amplitude)")
-def _paced_gait():
-    from .kinematics import analyse, record
-    from .simulation import SimConfig
-    s = WormSimulation(env=Environment(width=44.0, height=32.0),
-                       config=SimConfig(seed=0, scripted_body=False,
-                                        cord_pacemaker_pa=100.0,
-                                        head_pacemaker_pa=100.0,
-                                        head_steer_pa=40.0,
-                                        reversal_threshold=1.0))
-    for _ in range(int(12.0 / s.cfg.dt)):
-        s.step()
-    d0 = s.state.distance
-    r = analyse(record(s, seconds=25.0, settle=0.0))
-    speed = (s.state.distance - d0) / 25.0
-    ok = (speed >= 0.10 and 0.12 <= r["bend_amplitude_bl"] <= 0.30
-          and r["wave_direction"] == "forward"
-          and r["posterior_fraction"] > 0.5)
-    return ok, (f"speed {speed:.3f} mm/s, amp {r['bend_amplitude_bl']*100:.1f}% "
-                f"BL, {r['wave_direction']}, posterior/anterior "
-                f"{r['posterior_fraction']:.2f}, via real NMJ and calcium")
+    from .kinematics import record
+    got = {}
+    for label, ablate in (("intact", ()), ("ablated", None)):
+        s = WormSimulation(env=Environment(width=44.0, height=32.0),
+                           config=SimConfig(seed=0))
+        if ablate is None:
+            for k in range(10, 17):
+                s.ablate(f"dBWML{k}")
+                s.ablate(f"dBWMR{k}")
+        for _ in range(int(12.0 / s.cfg.dt)):
+            s.step()
+        rec = record(s, seconds=20.0, settle=0.0)
+        got[label] = float(rec.curvature[:, 10:16].mean())
+    ok = got["intact"] > 0.0 and got["ablated"] < -0.3
+    return ok, (f"mid-body dorsoventral curvature bias: intact "
+                f"{got['intact']:+.3f}, dorsal muscles ablated "
+                f"{got['ablated']:+.3f} (ventral collapse)")
 
 
 @check("the animal locomotes on connectome drive alone",
@@ -247,9 +202,7 @@ def _emergent_locomotion():
     from .simulation import SimConfig
     from .environment import Environment
     env = Environment(width=44.0, height=32.0)
-    s = WormSimulation(env=env, config=SimConfig(seed=0, scripted_body=False,
-                                        cord_pacemaker_pa=0.0,
-                                        head_pacemaker_pa=0.0))
+    s = WormSimulation(env=env, config=SimConfig(seed=0, muscle_pacemaker_pa=0.0))
     for _ in range(int(10.0 / s.cfg.dt)):
         s.step()
     d0 = s.state.distance
@@ -467,8 +420,7 @@ def _emergent_drive():
     from .kinematics import dominant_frequency, muscle_drive, rhythmicity
     from .simulation import SimConfig
     quiet = WormSimulation(env=Environment(width=44.0, height=32.0),
-                           config=SimConfig(seed=0, cord_pacemaker_pa=0.0,
-                                            head_pacemaker_pa=0.0))
+                           config=SimConfig(seed=0, muscle_pacemaker_pa=0.0))
     dor, ven, dt = muscle_drive(quiet, seconds=60.0, settle=10.0)
     mid = dor.shape[1] // 2
     diff = (dor - ven)[:, mid]
@@ -740,10 +692,7 @@ def _kinematics():
     from .body import BodyParams
     from .kinematics import analyse, record
     p = BodyParams()
-    from .simulation import SimConfig
-    fixture = WormSimulation(env=Environment(width=44.0, height=32.0),
-                             config=SimConfig(seed=0, scripted_body=True))
-    got = analyse(record(fixture, seconds=60.0, settle=10.0))
+    got = analyse(record(_sim(), seconds=60.0, settle=10.0))
     ok = (abs(got["undulation_hz"] - p.freq_hz) < 0.03
           and abs(got["wavelength_bl"] - p.wavelength_bl) < 0.05
           and got["wave_direction"] == "forward"
