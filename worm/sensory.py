@@ -128,6 +128,18 @@ TOUCH_FIELDS: list[dict] = [
 ]
 
 
+# Mechanoreceptor currents are PHASIC: force evokes a rapidly activating
+# current that decays during a sustained press, and REMOVAL of the force
+# evokes a second current of the same sign, so the receptor reports change in
+# both directions rather than load (O'Hagan, Chalfie & Goodman 2005 Nat
+# Neurosci 8:43: MRCs at onset and offset, Na+-carried, amiloride-blocked,
+# adapting within a few tens of milliseconds; threshold ~100 nN, saturating
+# at 1-2 uN). Modelled as the rectified difference between the stimulus and
+# its own lowpass: |s - lowpass(s)| peaks at onset and offset and dies during
+# the hold, which is the measured waveform shape.
+TOUCH_ADAPT_TAU_S = 0.04   # a few tens of ms, O'Hagan et al. 2005
+
+
 def _field_coverage(u: float, start: float, end: float, soft: float) -> float:
     """Smooth window over the body: full inside [start, end], tapering at the
     edges rather than switching on and off, because a sensory process fades
@@ -157,6 +169,8 @@ class SensorySystem:
             self.fields.append({**f, "idx": conn.indices(present),
                                 "missing": [c for c in f["cells"]
                                             if c not in conn.index]})
+        # Phasic mechanotransduction state: one lowpass per receptive field.
+        self._touch_lp = [0.0] * len(self.fields)
         # Adaptive state for the derivative-taking sensors.
         self._salt_prev: float | None = None
         self._odor_prev: float | None = None
@@ -225,12 +239,12 @@ class SensorySystem:
             if v != 0.0 and len(self.idx[modality]):
                 I[self.idx[modality]] += v * amplitude
 
-        drive.update(self._apply_touch(env, I, amplitude))
+        drive.update(self._apply_touch(env, I, amplitude, dt))
         self.last = {k: v for k, v in drive.items() if v}
         return I
 
     def _apply_touch(self, env: Environment, I: np.ndarray,
-                     amplitude: float) -> dict[str, float]:
+                     amplitude: float, dt: float) -> dict[str, float]:
         """Inject mechanosensory current according to where the animal was touched.
 
         Each receptive field contributes in proportion to how much of it the
@@ -240,25 +254,28 @@ class SensorySystem:
         """
         per_modality: dict[str, float] = {}
         pokes = env.active_pokes()
-        if not pokes:
-            return per_modality
+        alpha = 1.0 - np.exp(-dt / TOUCH_ADAPT_TAU_S)
 
-        for f in self.fields:
-            if len(f["idx"]) == 0:
+        for k, f in enumerate(self.fields):
+            total = 0.0
+            if pokes and len(f["idx"]):
+                for p in pokes:
+                    # PVD is high-threshold: gentle stroking never reaches it.
+                    if f.get("harsh_only") and not p.harsh:
+                        continue
+                    cov = _field_coverage(p.u, f["start"], f["end"], f["soft"])
+                    total += p.strength * cov * f.get("weight", 1.0)
+            # Phasic transduction: the receptor reports |change|, exciting at
+            # both onset and offset and adapting out during a hold.
+            lp = self._touch_lp[k]
+            self._touch_lp[k] = lp + alpha * (total - lp)
+            phasic = abs(total - lp)
+            if phasic <= 0.0 or len(f["idx"]) == 0:
                 continue
             gain = self._gain(f["modality"])
             if gain <= 0.0:
                 continue
-            total = 0.0
-            for p in pokes:
-                # PVD is high-threshold: gentle stroking never reaches it.
-                if f.get("harsh_only") and not p.harsh:
-                    continue
-                cov = _field_coverage(p.u, f["start"], f["end"], f["soft"])
-                total += p.strength * cov * f.get("weight", 1.0)
-            if total <= 0.0:
-                continue
-            v = float(np.clip(total * gain, 0.0, 2.5))
+            v = float(np.clip(phasic * gain, 0.0, 2.5))
             I[f["idx"]] += v * amplitude
             per_modality[f["modality"]] = per_modality.get(f["modality"], 0.0) + v
         return per_modality

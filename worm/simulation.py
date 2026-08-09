@@ -96,16 +96,18 @@ class SimConfig:
     # neurons well off rest, so a fixed threshold either never fires or fires
     # constantly. Adapting the baseline is also what the real animal does.
     # Calibrated against the corrected 2020 wiring with the documented PLM
-    # sign override. Peak command-balance deviation to a strength-1 poke,
-    # 6 seeds, as min to max: anterior wild type 0.0061-0.0074; anterior
-    # mec-10 0.0032-0.0045; anterior mec-4 null 0.0014-0.0022; mid-body
-    # 0.0015-0.0025; gentle posterior 0.0017-0.0027; harsh posterior
-    # 0.0026-0.0036. The threshold sits INSIDE the mec-10 band and above every
-    # other, so wild type always responds, mec-10 responds to a fraction of
-    # pokes (the partial-loss phenotype, Arnadottir et al. 2011 report ~50%
-    # residual touch current), and nulls, mid-body, gentle posterior and harsh
-    # posterior all stay below it.
-    reversal_threshold: float = 0.0038
+    # sign override and PHASIC mechanotransduction (O'Hagan et al. 2005: the
+    # receptor current fires at stimulus onset and offset and adapts within
+    # tens of ms, so the command neurons integrate a transient, not a hold).
+    # Peak command-balance deviation to a strength-1 poke, 3 seeds, min to
+    # max: anterior wild type 0.0061-0.0064; anterior mec-10 0.0032-0.0037;
+    # anterior mec-4 null 0.0015-0.0018; mid-body 0.0016-0.0020; gentle
+    # posterior 0.0017-0.0021; harsh posterior 0.0019-0.0024. The threshold
+    # sits INSIDE the mec-10 band and above every other, so wild type always
+    # responds, mec-10 responds to a fraction of pokes (the partial-loss
+    # phenotype, Arnadottir et al. 2011 report ~50% residual touch current),
+    # and nulls, mid-body, gentle posterior and harsh posterior stay below.
+    reversal_threshold: float = 0.0034
     baseline_tau_s: float = 8.0
     reversal_min_s: float = 0.9
     reversal_max_s: float = 4.0

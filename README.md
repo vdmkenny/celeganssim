@@ -60,6 +60,10 @@ cross over and is unreliable. These follow from the connectome rather than from
 rules: PLM has no chemical output at all, reaching the forward command
 interneuron PVC purely through gap junctions.
 
+Mechanotransduction is phasic, as measured: the receptor current fires at
+stimulus onset and offset and adapts within tens of milliseconds, so the
+neurons report change rather than load (O'Hagan et al. 2005).
+
 Harsh touch (100-200 uN) is a separate channel. FLP covers the head and is
 reversal-biased in the wiring; PVD tiles the rest of the body and favours
 forward. Both are MEC-4 independent, so harsh responses survive in `mec-4`
@@ -407,6 +411,7 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 
 **Locomotion**
 - [Boyle, Berri & Cohen (2012), Front. Comput. Neurosci. 6:10](https://doi.org/10.3389/fncom.2012.00010)
+- [O'Hagan, Chalfie & Goodman (2005), Nat. Neurosci. 8:43](https://doi.org/10.1038/nn1362) (mechanoreceptor currents: phasic, onset and offset, tens-of-ms adaptation)
 - [Wen et al. (2012), Neuron 76:750](https://doi.org/10.1016/j.neuron.2012.08.039) (proprioceptive coupling)
 - [Haspel, O'Donovan & Hart (2010), J. Neurosci. 30:11151](https://doi.org/10.1523/JNEUROSCI.1494-10.2010) (B-class active in forward, A-class in backward locomotion)
 - [Kawano et al. (2011), Neuron 72:572](https://doi.org/10.1016/j.neuron.2011.09.005) (A/B activity balance sets direction)
