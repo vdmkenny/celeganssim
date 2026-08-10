@@ -314,7 +314,7 @@ def _posterior_innervation():
              "spike threshold. The measured whole-cell input resistance is "
              "1 GOhm, so the tonic conductance should be a fraction of the "
              "leak rather than five times it, which points at the release "
-             "variable resting at 54.5% of its maximum")
+             "variable resting at 54.5% of its maximum (issue #17)")
 def _leak_bounds():
     from .connectome import Connectome
     from .genome import Genome
