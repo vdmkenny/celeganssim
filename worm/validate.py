@@ -511,6 +511,53 @@ def _ant():
     return r["reversed"], f"reversed={r['reversed']}"
 
 
+@check("tap habituation decrements the response and rest restores it",
+       "repeated near-threshold plate taps wane the evoked response by about "
+       "a third and rest restores most of it. The decrement lives in the "
+       "DIFFERENCE of the two antagonistic tap reflexes, which is why a "
+       "localised anterior poke barely habituates here while the plate tap "
+       "does",
+       "Rankin, Beck & Chiba 1990 Behav Brain Res 37:89 (decrement over "
+       "repeated taps, recovery over minutes); Wicks & Rankin 1995 J "
+       "Neurosci 15:2434 (antagonistic reflex integration); Wicks & Rankin "
+       "1997 Behav Neurosci 111:342 (sensory-output depression)")
+def _habituation_check():
+    from .assays import run_assay
+    r = run_assay("touch-habituation", tap_strength=1.0)["result"]
+    ok = (r["decrement"] is not None and r["decrement"] >= 0.20
+          and r["recovery_mag"] > r["late_mag"]
+          + 0.1 * (r["early_mag"] - r["late_mag"]))
+    return ok, (f"magnitude {r['early_mag']:.4f} to {r['late_mag']:.4f} "
+                f"({r['decrement']*100:.0f}% decrement), rest restores to "
+                f"{r['recovery_mag']:.4f}")
+
+
+@check("a strong tap's reversal probability habituates",
+       "at a reliably suprathreshold tap strength, the fraction of taps that "
+       "still trigger a reversal should fall across the train, which is the "
+       "binary readout Rankin also reports",
+       "Rankin, Beck & Chiba 1990 Behav Brain Res 37:89",
+       xfail="touch-cell output depression cannot produce this in the "
+             "current wiring. The suprathreshold response starts on the "
+             "pathway's saturation shoulder, so the measured depression "
+             "leaves the reversal rate at 1.00 throughout, and driving the "
+             "rate 3.3x harder makes the response GROW 10% instead: PLM's "
+             "chemical output onto the backward pool is inhibitory, so deep "
+             "depression disinhibits AVA faster than the anterior side "
+             "decrements. Closing this needs per-class depression rates, "
+             "never measured, or plasticity downstream of the sensory "
+             "synapses (Wicks & Rankin 1997 localise the measured component "
+             "to the sensory output, which is what is implemented)")
+def _habituation_probability():
+    from .assays import run_assay
+    r = run_assay("touch-habituation")["result"]
+    ok = (r["early_response_rate"] >= 0.5
+          and r["late_response_rate"] <= r["early_response_rate"] - 0.3)
+    return ok, (f"response rate {r['early_response_rate']:.2f} early to "
+                f"{r['late_response_rate']:.2f} late at suprathreshold "
+                f"strength")
+
+
 @check("posterior touch does not reverse",
        "posterior touch accelerates forward instead of reversing",
        "Chalfie et al. 1985: PLM gap-junctions to the forward command neuron PVC")

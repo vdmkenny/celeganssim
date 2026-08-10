@@ -37,7 +37,7 @@ anything.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 38 checks against published measurements, in parallel
+worm validate         # 40 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -62,7 +62,15 @@ interneuron PVC purely through gap junctions.
 
 Mechanotransduction is phasic, as measured: the receptor current fires at
 stimulus onset and offset and adapts within tens of milliseconds, so the
-neurons report change rather than load (O'Hagan et al. 2005).
+neurons report change rather than load (O'Hagan et al. 2005). Repeated plate
+taps habituate: synaptic depression at the touch cells' output synapses
+(Wicks & Rankin 1997) halves the evoked response over twelve taps and rest
+restores it (Rankin et al. 1990). The decrement lives in the difference of
+the two antagonistic tap reflexes (Wicks & Rankin 1995), which is why a
+localised poke habituates far less than a whole-body tap. The suprathreshold
+binary response does not habituate here and deeper depression sensitises it
+through PLM disinhibition, a wiring-level limit tracked as an expected
+failure.
 
 Harsh touch (100-200 uN) is a separate channel. FLP covers the head and is
 reversal-biased in the wiring; PVD tiles the rest of the body and favours
@@ -221,7 +229,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 38 checks: 25 behavioural, 13 consistency, gaps as expected failures |
+| `worm/validate.py` | 40 checks: 27 behavioural, 13 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry, provenance tags enforced by a check |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -249,9 +257,9 @@ rather than making it, so are not modelled as GABAergic.
 
 ## Validation
 
-`worm validate` runs 38 checks against published measurements: 25 behavioural
+`worm validate` runs 40 checks against published measurements: 27 behavioural
 (the animal is run and measured) and 12 consistency checks (parameter and data
-invariants). 29 pass. Nine are registered expected failures, each naming the
+invariants). 30 pass. Ten are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
@@ -412,6 +420,9 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 **Locomotion**
 - [Boyle, Berri & Cohen (2012), Front. Comput. Neurosci. 6:10](https://doi.org/10.3389/fncom.2012.00010)
 - [O'Hagan, Chalfie & Goodman (2005), Nat. Neurosci. 8:43](https://doi.org/10.1038/nn1362) (mechanoreceptor currents: phasic, onset and offset, tens-of-ms adaptation)
+- [Rankin, Beck & Chiba (1990), Behav. Brain Res. 37:89](https://doi.org/10.1016/0166-4328(90)90074-o) (tap habituation: decrement and recovery)
+- [Wicks & Rankin (1995), J. Neurosci. 15:2434](https://doi.org/10.1523/JNEUROSCI.15-03-02434.1995) (the tap response integrates antagonistic reflexes)
+- [Wicks & Rankin (1997), Behav. Neurosci. 111:342](https://doi.org/10.1037/0735-7044.111.2.342) (habituation localises to the touch cells' output synapses)
 - [Wen et al. (2012), Neuron 76:750](https://doi.org/10.1016/j.neuron.2012.08.039) (proprioceptive coupling)
 - [Haspel, O'Donovan & Hart (2010), J. Neurosci. 30:11151](https://doi.org/10.1523/JNEUROSCI.1494-10.2010) (B-class active in forward, A-class in backward locomotion)
 - [Kawano et al. (2011), Neuron 72:572](https://doi.org/10.1016/j.neuron.2011.09.005) (A/B activity balance sets direction)

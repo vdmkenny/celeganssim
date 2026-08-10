@@ -178,10 +178,47 @@ class NeuralParams:
     k_h_muscle = 7.0        # its steepness, mV
     tau_h_muscle = 10.0     # its time constant, ms
 
-    # Touch-cell release depression. Rate is fitted to the classic decrement,
-    # about half the response gone after ten taps at a 10 s interstimulus
-    # interval (Rankin et al. 1990); recovery runs over minutes.
-    trn_dep_rate = 2.3e-4     # depression per ms of above-rest release
+    # Touch-cell release depression. Rate is fitted to the decrement the
+    # mechanism genuinely produces, and its limits are findings, not tuning
+    # targets. A localised anterior poke barely habituates: that response is
+    # carried largely by gap junctions depression cannot touch, and its
+    # chemical component is sign-mixed (ALM's chemical output targets the
+    # forward driver PVC). A near-threshold plate tap habituates well,
+    # through the DIFFERENCE of two antagonistic reflexes (Wicks & Rankin
+    # 1995 J Neurosci 15:2434). A strong, reliably suprathreshold tap does
+    # NOT habituate here, and driving the rate harder makes it SENSITISE:
+    # PLM's output onto the backward pool is inhibitory, so deep depression
+    # disinhibits AVA faster than the anterior side decrements (measured: at
+    # 3.3x this rate the tap response grows 10% over twelve taps). Closing
+    # that gap needs per-class depression rates, which were never measured,
+    # or plasticity downstream of the sensory synapses; it is tracked as an
+    # expected failure in the validation suite. Recovery runs over minutes
+    # (Rankin, Beck & Chiba 1990).
+    trn_dep_rate = 5.5e-4     # depression per ms of above-rest release
+    # Depression must not be driven by noise. Release above rest is rectified
+    # before it drives depression, and rectified zero-mean noise has a
+    # positive mean, so without a deadband the ordinary membrane jitter
+    # depresses the touch cells tonically and recovery can never complete
+    # (measured: a 180 s rest recovered essentially nothing). The deadband
+    # sits several standard deviations above the resting release noise; a
+    # real touch drives release to saturation and clears it by an order of
+    # magnitude.
+    trn_dep_deadband = 0.05   # release excess ignored as noise
+    # Depression onset is slow relative to one stimulus. The measured
+    # decrement is ACROSS taps at a 10 s interstimulus interval (Rankin et
+    # al. 1990), and letting release depress instantaneously lets a single
+    # 350 ms poke disinhibit its own late response: PLM's inhibition onto AVA
+    # weakened mid-poke, and gentle-posterior and harsh-posterior touch both
+    # began driving reversals through the rebound (measured: the posterior
+    # band rose from 0.0017-0.0021 to 0.0032-0.0037 and harsh posterior to
+    # 0.0043-0.0048, past the reversal threshold). The depression drive is
+    # therefore low-passed with a time constant that sits between one
+    # response window (about 3 s) and the interstimulus interval (10 s), so
+    # depression expresses BETWEEN stimuli, which is where the measurement
+    # lives, and most of each tap's depression charge still lands before the
+    # next tap. At 2 s the filter only delayed the rebound into the window's
+    # tail; at 8 s the in-window expression is a few tenths of a percent.
+    trn_dep_onset_ms = 8000.0
     trn_dep_recovery_ms = 90000.0
     beta = 0.125      # sigmoid steepness, 1/mV
     a_r = (1.0 / 1.5) / 1000.0   # synaptic rise rate, 1/ms  (0.667 s^-1)
@@ -246,6 +283,8 @@ PROVENANCE = {
     "tau_h_muscle": "tuned",
     "trn_dep_rate": "tuned",         # fit to Rankin et al. 1990 decrement
     "trn_dep_recovery_ms": "tuned",  # recovery over minutes, same source
+    "trn_dep_deadband": "tuned",     # several sigma above resting noise
+    "trn_dep_onset_ms": "tuned",     # long against one tap, short against ISI
     "beta": "published",    # Kunert et al. 2014
     "a_r": "published",     # Wicks/Kunert, 1.5x time rescale
     "a_d": "published",
@@ -487,6 +526,7 @@ class NervousSystem:
         # Muscle calcium, as a two-stage cascade so the impulse response is
         # the measured biexponential. Starts at the resting activation, which
         # is 0.5 because each threshold is solved to its own resting potential.
+        self._trn_exc = np.zeros(self._trn_idx.size)
         self.ca_stage = np.full(self._muscle_idx.size, 0.5)
         self.ca = np.full(self._muscle_idx.size, 0.5)
         # Spike gating, at its steady state for the muscle resting potential.
@@ -584,9 +624,13 @@ class NervousSystem:
         phi = self._sigmoid(p.beta * (self.V - self.V_th))
         if self._trn_idx.size:
             t = self._trn_idx
-            excess = np.maximum(phi[t] - 0.5, 0.0) * 2.0
+            excess = np.maximum(phi[t] - 0.5 - p.trn_dep_deadband,
+                                0.0) * 2.0
+            self._trn_exc += (dt / p.trn_dep_onset_ms) \
+                * (excess - self._trn_exc)
             self.dep[t] += dt * ((1.0 - self.dep[t]) / p.trn_dep_recovery_ms
-                                 - p.trn_dep_rate * excess * self.dep[t])
+                                 - p.trn_dep_rate * self._trn_exc
+                                 * self.dep[t])
             np.clip(self.dep[t], 0.05, 1.0, out=self.dep[t])
         rate = p.a_r * phi + p.a_d
         s_inf = p.a_r * phi / rate

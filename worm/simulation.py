@@ -100,13 +100,17 @@ class SimConfig:
     # receptor current fires at stimulus onset and offset and adapts within
     # tens of ms, so the command neurons integrate a transient, not a hold).
     # Peak command-balance deviation to a strength-1 poke, 3 seeds, min to
-    # max: anterior wild type 0.0061-0.0064; anterior mec-10 0.0032-0.0037;
-    # anterior mec-4 null 0.0015-0.0018; mid-body 0.0016-0.0020; gentle
-    # posterior 0.0017-0.0021; harsh posterior 0.0019-0.0024. The threshold
+    # max, measured WITH touch-cell depression and its 8 s onset filter in
+    # place: anterior wild type 0.0061-0.0065; anterior mec-10 0.0033-0.0037;
+    # anterior mec-4 null 0.0015-0.0018; mid-body 0.0019-0.0023; gentle
+    # posterior 0.0020-0.0024; harsh posterior 0.0024-0.0029. The threshold
     # sits INSIDE the mec-10 band and above every other, so wild type always
     # responds, mec-10 responds to a fraction of pokes (the partial-loss
     # phenotype, Arnadottir et al. 2011 report ~50% residual touch current),
     # and nulls, mid-body, gentle posterior and harsh posterior stay below.
+    # The onset filter matters here: with instantaneous depression a single
+    # poke disinhibited its own late response through PLM and pushed the
+    # posterior bands past this threshold.
     reversal_threshold: float = 0.0034
     baseline_tau_s: float = 8.0
     reversal_min_s: float = 0.9
@@ -581,6 +585,9 @@ class WormSimulation:
             self._bwd_baseline += a * (cmd_balance - self._bwd_baseline)
         bwd_rel = cmd_balance - self._bwd_baseline
 
+        # Exposed for assays and the viewer: the decision variable the
+        # state machine just consumed.
+        self.last_cmd_deviation = bwd_rel
         self._update_behavior(dt, bwd_rel)
 
         g = self.genome

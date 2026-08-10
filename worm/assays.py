@@ -198,38 +198,84 @@ def _thermotaxis(knockouts=(), ablations=(), seed=0, minutes=8.0) -> dict:
             "reversals": sim.state.reversal_count}
 
 
+# Plate taps in the behavioural literature are strong, standardized stimuli
+# (a solenoid striking the plate), well above a single gentle stroke. In this
+# model the tap drives both antagonistic fields at once and their competition
+# cancels most of a strength-1 stimulus (naive deviation 0.0029 against a
+# reversal threshold of 0.0034), so a naive strength-1 tap never reverses; at
+# strength 2 the naive tap is reliably suprathreshold (0.0107, 3 of 3
+# seeds), which matches the assay's design point of starting from a robust
+# response and watching it wane (Rankin, Beck & Chiba 1990).
+TAP_STRENGTH = 2.0
+
+
 @assay("touch-habituation",
-       metric="response probability across repeated taps",
-       expected="responses wane with repeated stimulation and recover with "
-                "rest; the canonical non-associative learning paradigm",
-       source="Rankin, Beck & Chiba 1990 Behav Brain Res 37:89; Wicks & "
-              "Rankin 1996",
-       description="Deliver repeated anterior taps and count how often each "
-                   "one still produces a reversal.")
+       metric="evoked command deviation across repeated plate taps, then "
+              "after rest",
+       expected="response magnitude wanes with repeated stimulation and "
+                "recovers with rest; the canonical non-associative learning "
+                "paradigm. The stimulus is a plate TAP, both receptive "
+                "fields at once, and that matters: the tap response is the "
+                "difference of two antagonistic reflexes, the anterior "
+                "field's reversal against the posterior field's "
+                "acceleration, so depression of both sides collapses the "
+                "difference far faster than either reflex alone. A "
+                "localised anterior poke habituates only weakly here, "
+                "because that response is carried largely by gap junctions "
+                "depression cannot touch and its chemical component is "
+                "sign-mixed",
+       source="Rankin, Beck & Chiba 1990 Behav Brain Res 37:89 (decrement "
+              "and recovery); Wicks & Rankin 1995 J Neurosci 15:2434 (tap "
+              "response integrates antagonistic ALM and PLM reflexes); "
+              "Wicks & Rankin 1997 Behav Neurosci 111:342 (depression at "
+              "the touch cell output synapses)",
+       description="Deliver repeated plate taps (both fields), measure each "
+                   "response's peak command deviation, rest, then probe for "
+                   "recovery. The life clock is held: at the default 400x "
+                   "development speedup a five-minute protocol is a day and "
+                   "a half unfed, and starvation is what a decayed probe "
+                   "would otherwise measure.")
 def _habituation(knockouts=(), ablations=(), seed=0, taps=12,
-                 isi_s=10.0) -> dict:
+                 isi_s=10.0, rest_s=180.0, probe_taps=2,
+                 tap_strength=TAP_STRENGTH) -> dict:
     sim = _build(knockouts, ablations, seed, width=60.0, height=44.0)
+    sim.cfg.life_speedup = 0.0
     for _ in range(500):
         sim.step()
-    responses = []
-    for _ in range(taps):
+
+    def tap() -> dict:
         r0 = sim.state.reversal_count
-        sim.env.poke("anterior", 1.0, duration=0.35)
-        for _ in range(int(3.0 / sim.cfg.dt)):
+        sim.env.poke("anterior", tap_strength, duration=0.35)
+        sim.env.poke("posterior", tap_strength, duration=0.35)
+        peak = 0.0
+        for _ in range(int(isi_s / sim.cfg.dt)):
             sim.step()
-        responses.append(int(sim.state.reversal_count > r0))
-        for _ in range(int(max(isi_s - 3.0, 0.0) / sim.cfg.dt)):
-            sim.step()
-    half = max(len(responses) // 2, 1)
-    return {"responses": responses,
-            "response_rate": round(sum(responses) / len(responses), 3),
-            "first_half_rate": round(sum(responses[:half]) / half, 3),
-            "second_half_rate": round(sum(responses[half:]) /
-                                      max(len(responses) - half, 1), 3),
-            "habituated": bool(sum(responses[half:]) < sum(responses[:half])),
-            "note": ("the model has no short-term synaptic plasticity yet "
-                     "(issue #8), so habituation cannot emerge; a flat "
-                     "response vector is the expected current result")}
+            peak = max(peak, float(getattr(sim, "last_cmd_deviation", 0.0)))
+        return {"reversed": int(sim.state.reversal_count > r0),
+                "peak_deviation": round(peak, 5)}
+
+    train = [tap() for _ in range(taps)]
+    for _ in range(int(rest_s / sim.cfg.dt)):
+        sim.step()
+    probe = [tap() for _ in range(probe_taps)]
+
+    def mag(rows):
+        return float(np.mean([r["peak_deviation"] for r in rows])) if rows else 0.0
+
+    early, late, rec = mag(train[:3]), mag(train[-3:]), mag(probe)
+    return {
+        "train": train,
+        "probe_after_rest": probe,
+        "early_mag": round(early, 5),
+        "late_mag": round(late, 5),
+        "decrement": round(1.0 - late / early, 3) if early > 0 else None,
+        "recovery_mag": round(rec, 5),
+        "recovered": bool(early > 0 and rec > late + 0.25 * (early - late)),
+        "early_response_rate": round(
+            sum(r["reversed"] for r in train[:6]) / 6.0, 3),
+        "late_response_rate": round(
+            sum(r["reversed"] for r in train[6:]) / max(len(train) - 6, 1), 3),
+    }
 
 
 @assay("basal-slowing",
