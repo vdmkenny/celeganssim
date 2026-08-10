@@ -232,7 +232,8 @@ class Lifecycle:
         p = self.params
         return float(p.q10 ** ((temp_c - p.reference_temp) / 10.0))
 
-    def pumping_rate(self, food: float, serotonin_scale: float = 1.0) -> float:
+    def pumping_rate(self, food: float, serotonin_scale: float = 1.0,
+                     pump_scale: float = 1.0) -> float:
         """Pumps per second, including the age-related decline.
 
         Measured trajectory at 20 C: 320/min at adult day 2, 180/min at day 7,
@@ -249,15 +250,19 @@ class Lifecycle:
             # Roughly flat, then a steep fall in the last third of life.
             age_scale = float(max(0.0, min(1.0, 1.0 / (1.0 + math.exp((frac - 0.62) * 11.0)))))
         if food <= 0.01:
-            return 0.4 * serotonin_scale * age_scale
+            return 0.4 * serotonin_scale * pump_scale * age_scale
         basal = 0.9
         stimulated = (PUMP_MAX_HZ - basal) * min(food, 1.0) * serotonin_scale
-        return (basal + stimulated) * age_scale
+        # pump_scale carries pharyngeal genetics: eat-2 loses the fast
+        # MC-driven pumping and keeps a fifth of the rate (Raizen, Lee &
+        # Avery 1995), which is what makes it dietary-restricted rather than
+        # merely labelled so.
+        return (basal + stimulated) * pump_scale * age_scale
 
     # -- update ---------------------------------------------------------
     def step(self, dt: float, *, food: float, temp_c: float,
              pheromone: float = 0.0, serotonin_scale: float = 1.0,
-             longevity_scale: float = 1.0) -> dict:
+             pump_scale: float = 1.0, longevity_scale: float = 1.0) -> dict:
         events: dict = {}
         if not self.alive:
             return events
@@ -265,7 +270,7 @@ class Lifecycle:
         self.age_s += dt
 
         # --- feeding ---
-        self.pump_hz = self.pumping_rate(food, serotonin_scale)
+        self.pump_hz = self.pumping_rate(food, serotonin_scale, pump_scale)
         ingested = self.pump_hz * FOOD_PER_PUMP * dt * min(food, 1.0)
         self.total_ingested += ingested
         size = max(self.body_length_mm, 0.05)

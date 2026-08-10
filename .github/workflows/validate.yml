@@ -21,7 +21,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: data/
-          key: celeganssim-data-v1
+          key: celeganssim-data-${{ hashFiles('scripts/fetch_data.py') }}
 
       - name: Install dependencies
         run: pip install numpy

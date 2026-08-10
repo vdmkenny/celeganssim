@@ -257,6 +257,10 @@ rather than making it, so are not modelled as GABAergic.
 
 ## Validation
 
+[CLAIMS.md](CLAIMS.md) maps every claim here to the mechanism producing it,
+tagged measured, published, tuned or scripted, so the difference between what
+the model knows and what it assumes stays visible.
+
 `worm validate` runs 40 checks against published measurements: 27 behavioural
 (the animal is run and measured) and 12 consistency checks (parameter and data
 invariants). 30 pass. Ten are registered expected failures, each naming the
@@ -421,6 +425,7 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 - [Boyle, Berri & Cohen (2012), Front. Comput. Neurosci. 6:10](https://doi.org/10.3389/fncom.2012.00010)
 - [O'Hagan, Chalfie & Goodman (2005), Nat. Neurosci. 8:43](https://doi.org/10.1038/nn1362) (mechanoreceptor currents: phasic, onset and offset, tens-of-ms adaptation)
 - [Rankin, Beck & Chiba (1990), Behav. Brain Res. 37:89](https://doi.org/10.1016/0166-4328(90)90074-o) (tap habituation: decrement and recovery)
+- [Raizen, Lee & Avery (1995), Genetics 141:1365](https://doi.org/10.1093/genetics/141.4.1365) (eat-2 pharyngeal pumping deficit, the mechanism of its dietary restriction)
 - [Wicks & Rankin (1995), J. Neurosci. 15:2434](https://doi.org/10.1523/JNEUROSCI.15-03-02434.1995) (the tap response integrates antagonistic reflexes)
 - [Wicks & Rankin (1997), Behav. Neurosci. 111:342](https://doi.org/10.1037/0735-7044.111.2.342) (habituation localises to the touch cells' output synapses)
 - [Wen et al. (2012), Neuron 76:750](https://doi.org/10.1016/j.neuron.2012.08.039) (proprioceptive coupling)

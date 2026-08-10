@@ -713,6 +713,7 @@ class WormSimulation:
         life_dt = dt * self.cfg.life_speedup
         events = self.life.step(life_dt, food=food, temp_c=temp,
                                 pheromone=pher, serotonin_scale=serotonin,
+                                pump_scale=self.genome.global_scale("pumping"),
                                 longevity_scale=self.genome.longevity_scale())
         if food > 0.01:
             from .lifecycle import FOOD_PER_PUMP

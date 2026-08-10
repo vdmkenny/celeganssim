@@ -265,7 +265,14 @@ GENE_EFFECTS: dict[str, GeneEffect] = {
         "Pumps slowly, so it eats less and is effectively diet restricted; "
         "lifespan up 20-50%. Does NOT require daf-16, which is what separates "
         "dietary restriction from insulin signalling.",
-        global_scale={"lifespan": 1.35},
+        # Pumping falls to roughly a fifth of wild type: eat-2 encodes a
+        # nicotinic receptor subunit acting at the MC-to-pharynx synapse, and
+        # its loss leaves only the slow basal rhythm (Raizen, Lee & Avery
+        # 1995 Genetics 141:1365; McKay et al. 2004 report ~50 pumps/min
+        # against ~250-300 wild type). The dietary-restriction longevity is
+        # therefore MODELLED THROUGH ITS MECHANISM, less food per unit time,
+        # as well as through the curated lifespan scale.
+        global_scale={"lifespan": 1.35, "pumping": 0.2},
         sensory_scale={},
     ),
     "clk-1": GeneEffect(

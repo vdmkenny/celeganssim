@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import subprocess
 import sys
 import urllib.error
@@ -69,6 +70,43 @@ FILES: list[tuple[str, str, str, bool]] = [
 ]
 
 
+# SHA256 of every raw file, pinned so upstream drift is a loud error rather
+# than a silent change to every downstream result. The ConnectomeToolbox
+# serves files from a moving branch and the NCBI path tracks
+# latest_assembly_versions, so the same URL is not a version pin; these are.
+# On mismatch the file is re-downloaded once, and a second mismatch stops the
+# build: either upstream changed (investigate, then update the pin alongside
+# whatever recalibration the new data needs) or the download is corrupt.
+PINNED_SHA256: dict[str, str] = {
+    "celegans_genome.fna.gz":
+        "d62fb938c408acd0df3126aa38fd126d4a411f070e1a41ffa4f4a1056984cdd4",
+    "celegans_annotation.gff.gz":
+        "054c0970f5210aa1c580922561456fdce89c66b7b371df1e5b737dff8a94b549",
+    "celegans_features.txt.gz":
+        "e8924464982a5d626c97b2c0d0a21caad6ade32afc2e732f35095587a0d18e7c",
+    "herm_full_edgelist.csv":
+        "142693f17556148d7f962835b18ac6dd5af18b7467eef61815ebc1dd5474c0ca",
+    "all_cell_info.csv":
+        "e467c065342cafe8be7df2b6d781756fe1cfbae5fe7d74352a36682dea6b5fc9",
+    "cook_2020_adjacency.xlsx":
+        "1f4fdbf84746b69b49a8da0816f52787860ce349b638dce37924ba80f90c70c9",
+    "IndividualNeurons.csv":
+        "b69c0e994270493535994a69a47210dda04319592697eec2f4a65a9df8886195",
+    "aconnectome_white_1986_whole.csv":
+        "c8aac78756b71f6337629951e5f4211448e85d148f6db9b367b2cd0450bb403a",
+    "owmeta_cache.json":
+        "064374a0fba18a6f0661a005032144ce91f46973722e1f07bccabaf2f56e6ed0",
+}
+
+
+def sha256_of(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def human(n: int) -> str:
     for unit in ("B", "KB", "MB", "GB"):
         if n < 1024 or unit == "GB":
@@ -87,6 +125,9 @@ def verify(path: Path, is_gzip: bool) -> bool:
                 fh.read(4096)
         except (OSError, EOFError, gzip.BadGzipFile):
             return False
+    pinned = PINNED_SHA256.get(path.name)
+    if pinned is not None and sha256_of(path) != pinned:
+        return False
     return True
 
 
