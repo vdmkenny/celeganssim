@@ -83,6 +83,24 @@ PROPRIO_LENGTH_BL = 0.2
 HEAD_PACEMAKER_D = ["RMDDL", "RMDDR", "SMDDL", "SMDDR"]
 HEAD_PACEMAKER_V = ["RMDVL", "RMDVR", "SMDVL", "SMDVR"]
 
+# Spontaneous reversal generator. The animal reverses without any stimulus,
+# and the cellular correlate is measured: AVA activity rises precede
+# spontaneous reversals (Kato et al. 2015 Cell 163:656; Gordus et al. 2015),
+# and A-class upstates recur one to three times a minute in the only cells
+# ever patched (Liu, Chen & Wang 2014 Nat Commun 5:5155: VA5 upstates,
+# 1-3/min). The behavioural rate is measured too: roughly two reversals a
+# minute during local search just off food, falling toward dispersal, and
+# far fewer on food (Gray, Hill & Bargmann 2005 PNAS 102:3184). What is NOT
+# measured is the conductance basis of the upstate (UNC-2 by genetics, Gao
+# et al. 2018, no parameters), so the GENERATOR is scripted at the measured
+# statistics, a seeded Poisson process pulsing the backward command pool,
+# while everything downstream, the reversal itself, the omega coupling, the
+# gait consequences, runs through the real machinery.
+SPONT_PULSE_PA = 12.0        # enough to lift AVA/AVE past the calibrated
+                             # reversal threshold; scripted stand-in scale
+SPONT_PULSE_S = 1.2          # order of the behavioural bout trigger, well
+                             # under the 14.9 s dissected-prep upstate
+
 
 @dataclass
 class SimConfig:
@@ -138,6 +156,13 @@ class SimConfig:
     # B-type motor neuron, so there is no measured amplitude, reversal
     # potential, threshold or adaptation to anchor it. Off by default.
     propr_gain: float = 0.0
+    # Spontaneous reversal rates, per minute (see SPONT_PULSE_PA above).
+    # Off food: local-search rate, Gray, Hill & Bargmann 2005 (about 2/min
+    # in the first minutes off food). On food: reversals are much rarer;
+    # this value is a GUESS consistent with the same paper's on-food
+    # behaviour, no precise published number is carried here.
+    spont_rev_per_min_off_food: float = 1.9
+    spont_rev_per_min_on_food: float = 0.35
     # Muscle-level pacing: the compromise mode. The same wave algebra the
     # body oscillator uses, delivered as per-muscle currents into the 95 real
     # muscle cells instead of as prescribed curvature. The script couples in
@@ -191,6 +216,8 @@ PROVENANCE = {
     "muscle_pacemaker_mv": "scripted",  # the wave, delivered at the end organ
     "muscle_force_gain": "tuned",    # fit to measured bend amplitude
     "propr_gain": "tuned",   # no stretch-evoked current ever recorded
+    "spont_rev_per_min_off_food": "measured",  # Gray et al. 2005 local search
+    "spont_rev_per_min_on_food": "tuned",      # guess, same source qualitative
     "start_adult": "tuned",
     "life_speedup": "tuned",      # display convenience, not biology
 }
@@ -403,6 +430,33 @@ class WormSimulation:
             * (target - exc * RECTIFIED_WAVE_MEAN)
         return I
 
+    def spontaneous_current(self) -> np.ndarray:
+        """Scripted upstate generator: seeded Poisson pulses into AVA/AVE.
+
+        Statistics are the measured ones (see SPONT_PULSE_PA block); the
+        genome hook lets goa-1 raise the rate, which is its measured
+        phenotype (Segalat, Elkes & Kaplan 1995 Science 267:1648:
+        hyperreversal), and food state selects between the measured off-food
+        local-search rate and the on-food guess.
+        """
+        I = np.zeros(self.conn.n)
+        cfg = self.cfg
+        t = self.state.t
+        on_food = self.env.on_food(self.body.world_nodes()[0]) > 0.01
+        per_min = (cfg.spont_rev_per_min_on_food if on_food
+                   else cfg.spont_rev_per_min_off_food)
+        per_min *= self.genome.global_scale("spontaneous_reversal")
+        if per_min <= 0.0:
+            return I
+        if self._spont_next_s is None:
+            self._spont_next_s = t + float(self.rng.exponential(60.0 / per_min))
+        if t >= self._spont_next_s:
+            self._spont_until_s = t + SPONT_PULSE_S
+            self._spont_next_s = t + float(self.rng.exponential(60.0 / per_min))
+        if t < self._spont_until_s:
+            I[self.i_bwd] = SPONT_PULSE_PA
+        return I
+
     def proprioceptive_current(self) -> np.ndarray:
         """Current into each cell from the curvature anterior to it, pA.
 
@@ -480,6 +534,8 @@ class WormSimulation:
         self._pace_phase = 0.0
         self._pace_drive = (0.0, 0.0, 0.0, 1.0)
         self._pace_gated = (0.0, 0.0, 1.0, 0.0)
+        self._spont_next_s = None
+        self._spont_until_s = 0.0
         self.ns.reset()
         self.body.reset(x, y, heading)
         self.state = SimState()
@@ -571,7 +627,7 @@ class WormSimulation:
             * self._pace_drive[3] * dt
         I = self.sensory.compute(self.env, head, tail, dt,
                                  amplitude=cfg.sensory_amplitude)
-        I = I + self.proprioceptive_current()
+        I = I + self.proprioceptive_current() + self.spontaneous_current()
         I = I + self.muscle_pacemaker_current(*self._pace_gated)
         sub_dt = (dt * 1000.0) / cfg.neural_substeps  # ms
         for _ in range(cfg.neural_substeps):

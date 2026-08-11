@@ -70,19 +70,35 @@ def gait(knockouts=(), seconds=45.0, seed=0, settle=10.0) -> dict:
 
 
 def touch_response(region: str, knockouts=(), seed=0) -> dict:
-    """Poke the animal and report whether it reversed and how fast it then moved."""
-    s = _sim(knockouts, seed=seed)
-    for _ in range(500):
-        s.step()
-    r0, d0 = s.state.reversal_count, s.state.distance
-    s.env.poke(region, 1.0, duration=0.4)
+    """Poke the animal and report whether the poke CAUSED a reversal.
+
+    Paired against a sham: the same seed is run twice, identical except for
+    the poke, and the response is the difference. A bare count stopped being
+    valid the day the animal gained spontaneous reversals (about 2 a minute
+    off food, Gray et al. 2005): a reversal inside the window may simply be
+    one that was going to happen. The sham, sharing the seed, contains
+    exactly those, so subtracting it isolates the evoked response. This is
+    the same control a tracking experiment runs, with the luxury of a
+    genuinely identical animal.
+    """
     n = 150
-    for _ in range(n):
-        s.step()
+    out = {}
+    for label, poke in (("poked", True), ("sham", False)):
+        s = _sim(knockouts, seed=seed)
+        for _ in range(500):
+            s.step()
+        r0, d0 = s.state.reversal_count, s.state.distance
+        if poke:
+            s.env.poke(region, 1.0, duration=0.4)
+        for _ in range(n):
+            s.step()
+        out[label] = (s.state.reversal_count - r0,
+                      (s.state.distance - d0) / (n * s.cfg.dt))
     return {
-        "reversed": s.state.reversal_count > r0,
-        "n_reversals": s.state.reversal_count - r0,
-        "speed_after": (s.state.distance - d0) / (n * s.cfg.dt),
+        "reversed": out["poked"][0] > out["sham"][0],
+        "n_reversals": out["poked"][0],
+        "n_spontaneous": out["sham"][0],
+        "speed_after": out["poked"][1],
     }
 
 
@@ -509,6 +525,35 @@ def _resting():
 def _ant():
     r = touch_response("anterior")
     return r["reversed"], f"reversed={r['reversed']}"
+
+
+@check("the animal reverses spontaneously, at the measured rates",
+       "about two reversals a minute during local search off food, far fewer "
+       "on food, and goa-1 hyperreversing well above wild type. These "
+       "reversals are what make pirouette navigation possible at all",
+       "Gray, Hill & Bargmann 2005 PNAS 102:3184 (off-food local search "
+       "rate, on-food contrast); Liu, Chen & Wang 2014 (A-class upstates "
+       "1-3/min, the cellular correlate); Segalat, Elkes & Kaplan 1995 "
+       "Science 267:1648 (goa-1 hyperreversal)")
+def _spontaneous():
+    def rate(ko=(), food=False, seeds=(0, 1, 2)):
+        counts = []
+        for sd in seeds:
+            s = _sim(ko, seed=sd)
+            if food:
+                s.env.add_source(float(s.body.X[0]), float(s.body.X[1]),
+                                 kind="food", strength=1.0, sigma=15.0)
+            for _ in range(500):
+                s.step()
+            r0 = s.state.reversal_count
+            for _ in range(int(120.0 / s.cfg.dt)):
+                s.step()
+            counts.append(s.state.reversal_count - r0)
+        return float(np.mean(counts)) / 2.0
+    off, on, goa = rate(), rate(food=True), rate(ko=("goa-1",))
+    ok = 0.8 <= off <= 4.0 and on < off and goa > 2.0 * off
+    return ok, (f"off food {off:.1f}/min (measured ~2), on food {on:.1f}, "
+                f"goa-1 {goa:.1f}")
 
 
 @check("tap habituation decrements the response and rest restores it",

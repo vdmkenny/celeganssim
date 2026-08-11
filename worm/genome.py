@@ -220,8 +220,13 @@ GENE_EFFECTS: dict[str, GeneEffect] = {
         "Loopy: exaggerated deep body bends and hyperactive locomotion and egg "
         "laying. GOA-1 inhibits EGL-30, so removing it raises synaptic output "
         "(the same phenotype as egl-30 gain of function).",
+        # Hyperreversal is the measured core of the phenotype (Segalat,
+        # Elkes & Kaplan 1995 Science 267:1648): removing Go disinhibits the
+        # backward circuit and the animal keeps turning around. The 4x is a
+        # GUESS fitted so a goa-1 gait run shows the constant reversing the
+        # papers describe.
         global_scale={"chemical_synapse": 1.6, "arousal": 1.5,
-                      "bend_amplitude": 1.7},
+                      "bend_amplitude": 1.7, "spontaneous_reversal": 4.0},
     ),
     "egl-30": GeneEffect(
         "egl-30",

@@ -248,9 +248,15 @@ def _habituation(knockouts=(), ablations=(), seed=0, taps=12,
         sim.env.poke("anterior", tap_strength, duration=0.35)
         sim.env.poke("posterior", tap_strength, duration=0.35)
         peak = 0.0
-        for _ in range(int(isi_s / sim.cfg.dt)):
+        # Peak is read tap-locked, in the two seconds after the tap, not
+        # across the whole interstimulus interval: the animal now reverses
+        # spontaneously (Gray et al. 2005) and an upstate landing late in the
+        # interval is not a tap response.
+        for k in range(int(isi_s / sim.cfg.dt)):
             sim.step()
-            peak = max(peak, float(getattr(sim, "last_cmd_deviation", 0.0)))
+            if k * sim.cfg.dt < 2.0:
+                peak = max(peak,
+                           float(getattr(sim, "last_cmd_deviation", 0.0)))
         return {"reversed": int(sim.state.reversal_count > r0),
                 "peak_deviation": round(peak, 5)}
 
