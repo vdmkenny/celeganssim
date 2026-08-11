@@ -240,6 +240,11 @@ def _habituation(knockouts=(), ablations=(), seed=0, taps=12,
                  tap_strength=TAP_STRENGTH) -> dict:
     sim = _build(knockouts, ablations, seed, width=60.0, height=44.0)
     sim.cfg.life_speedup = 0.0
+    # Held for the same reason as the life clock: the tap-locked windows
+    # measure the EVOKED peak, and a spontaneous reversal landing in a
+    # late window masquerades as a failure to habituate. See validate._quiet.
+    sim.cfg.spont_rev_per_min_off_food = 0.0
+    sim.cfg.spont_rev_per_min_on_food = 0.0
     for _ in range(500):
         sim.step()
 

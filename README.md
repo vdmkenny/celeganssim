@@ -37,7 +37,7 @@ anything.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 40 checks against published measurements, in parallel
+worm validate         # 41 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -229,7 +229,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 40 checks: 27 behavioural, 13 consistency, gaps as expected failures |
+| `worm/validate.py` | 41 checks: 28 behavioural, 13 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry, provenance tags enforced by a check |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -261,7 +261,7 @@ rather than making it, so are not modelled as GABAergic.
 tagged measured, published, tuned or scripted, so the difference between what
 the model knows and what it assumes stays visible.
 
-`worm validate` runs 40 checks against published measurements: 27 behavioural
+`worm validate` runs 41 checks against published measurements: 28 behavioural
 (the animal is run and measured) and 12 consistency checks (parameter and data
 invariants). 30 pass. Ten are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real

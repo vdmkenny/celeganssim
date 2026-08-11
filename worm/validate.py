@@ -33,6 +33,22 @@ def _sim(knockouts=(), seed=0, **env_kw) -> WormSimulation:
     return s
 
 
+def _quiet(s: WormSimulation) -> WormSimulation:
+    """Silence the spontaneous reversal generator for raw-count assays.
+
+    touch_response needs no such thing: its sham arm shares the seed, so it
+    contains the identical spontaneous reversals and the subtraction removes
+    them. But a check that requires a raw count of ZERO reversals (harsh
+    posterior escape) cannot subtract, and the tap assay would have to run
+    its whole 5-minute protocol twice. Plate assays average spontaneity out
+    over ~25 animals (Rankin et al. 1990 Behav Brain Res 37:89); these
+    single-animal probes silence the generator instead, documented here.
+    """
+    s.cfg.spont_rev_per_min_off_food = 0.0
+    s.cfg.spont_rev_per_min_on_food = 0.0
+    return s
+
+
 def gait(knockouts=(), seconds=45.0, seed=0, settle=10.0) -> dict:
     """Run and measure speed, undulation amplitude and body length."""
     s = _sim(knockouts, seed=seed)
@@ -711,7 +727,7 @@ def _harsh_forward():
     # below the trigger: the animal accelerates rather than reversing.
     n = 0
     for seed in range(3):
-        s = _sim((), seed=seed)
+        s = _quiet(_sim((), seed=seed))
         for _ in range(500):
             s.step()
         r0 = s.state.reversal_count
