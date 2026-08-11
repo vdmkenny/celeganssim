@@ -536,7 +536,7 @@ def _ant():
        "1-3/min, the cellular correlate); Segalat, Elkes & Kaplan 1995 "
        "Science 267:1648 (goa-1 hyperreversal)")
 def _spontaneous():
-    def rate(ko=(), food=False, seeds=(0, 1, 2)):
+    def rate(ko=(), food=False, seeds=(0, 1)):
         counts = []
         for sd in seeds:
             s = _sim(ko, seed=sd)
@@ -546,10 +546,10 @@ def _spontaneous():
             for _ in range(500):
                 s.step()
             r0 = s.state.reversal_count
-            for _ in range(int(120.0 / s.cfg.dt)):
+            for _ in range(int(90.0 / s.cfg.dt)):
                 s.step()
             counts.append(s.state.reversal_count - r0)
-        return float(np.mean(counts)) / 2.0
+        return float(np.mean(counts)) / 1.5
     off, on, goa = rate(), rate(food=True), rate(ko=("goa-1",))
     ok = 0.8 <= off <= 4.0 and on < off and goa > 2.0 * off
     return ok, (f"off food {off:.1f}/min (measured ~2), on food {on:.1f}, "

@@ -235,6 +235,10 @@ class SimState:
 
 
 class WormSimulation:
+    # Per-process memo of the pristine tonic calcium baseline, keyed on the
+    # exact tonic input vector (see __init__).
+    _ca0_cache: dict = {}
+
     def __init__(self, env: Environment | None = None,
                  config: SimConfig | None = None,
                  genome: Genome | None = None,
@@ -326,9 +330,20 @@ class WormSimulation:
         I0 = self.sensory.compute(self.env, nodes[0], nodes[-1], self.cfg.dt,
                                   amplitude=self.cfg.sensory_amplitude)
         sub_dt = (self.cfg.dt * 1000.0) / self.cfg.neural_substeps
-        for _ in range(CA_BASELINE_SETTLE_STEPS):
-            self.ns.step(sub_dt, I0, noise=0.0)
-        self._mus_ca0 = self.ns.muscle_calcium().copy()
+        # The settled baseline is a pure function of the tonic input vector
+        # and the pristine network, and every sim in a validation run builds
+        # the same one, so it is memoised per process on the exact inputs.
+        # 4000 noise-free substeps per construction is the single largest
+        # fixed cost in the suite; the cache removes all but the first.
+        key = (I0.tobytes(), sub_dt, CA_BASELINE_SETTLE_STEPS)
+        cached = WormSimulation._ca0_cache.get(key)
+        if cached is not None:
+            self._mus_ca0 = cached.copy()
+        else:
+            for _ in range(CA_BASELINE_SETTLE_STEPS):
+                self.ns.step(sub_dt, I0, noise=0.0)
+            self._mus_ca0 = self.ns.muscle_calcium().copy()
+            WormSimulation._ca0_cache[key] = self._mus_ca0.copy()
         self.ns.reset()
         self.sensory._salt_prev = None
         self.sensory._odor_prev = None
