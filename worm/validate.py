@@ -1124,12 +1124,14 @@ def _daf():
 
 def _run_one(entry):
     """Execute one check. Module-level so process-pool workers can pickle it."""
+    import time
     name, expectation, source, sect, xfail, fn = entry
+    t0 = time.perf_counter()
     try:
         ok, detail = fn()
     except Exception as exc:
         ok, detail = False, f"raised {type(exc).__name__}: {exc}"
-    return ok, detail
+    return ok, detail, time.perf_counter() - t0
 
 
 def main(verbose: bool = True, jobs: int = 1, match: str | None = None) -> int:
@@ -1143,14 +1145,32 @@ def main(verbose: bool = True, jobs: int = 1, match: str | None = None) -> int:
     # Results come back in registration order regardless of finish order.
     if jobs > 1 and len(checks) > 1:
         from concurrent.futures import ProcessPoolExecutor
+        # Longest-first submission (LPT packing): with checks submitted in
+        # registration order, a long check picked up late runs after the pool
+        # has drained and sets the suite's tail all by itself. Estimated
+        # seconds of simulated behaviour per check; anything unlisted is
+        # cheap. Update alongside the checks; the printed [Ns] timings are
+        # the measurement.
+        est = {"spontaneously": 600, "habituates": 340, "probability": 340,
+               "tyramine": 130, "gentle touch": 90, "mec-10": 80,
+               "ablation": 80, "swims": 60, "crawls": 60, "unc-": 60,
+               "vab-7": 60, "circles": 60, "forward": 60, "muscles": 70,
+               "wave": 70, "reverses": 30}
+
+        def _cost(entry):
+            n = entry[0].lower()
+            return max((v for k, v in est.items() if k in n), default=1)
+
+        order = sorted(range(len(checks)), key=lambda i: -_cost(checks[i]))
         with ProcessPoolExecutor(max_workers=jobs) as pool:
-            results = list(pool.map(_run_one, checks))
+            futs = {i: pool.submit(_run_one, checks[i]) for i in order}
+            results = [futs[i].result() for i in range(len(checks))]
     else:
         results = [_run_one(c) for c in checks]
 
     passed = failed = xfailed = xpassed = 0
     section = None
-    for (name, expectation, source, sect, xfail, fn), (ok, detail) in \
+    for (name, expectation, source, sect, xfail, fn), (ok, detail, secs) in \
             zip(checks, results):
         if sect != section:
             section = sect
@@ -1171,7 +1191,7 @@ def main(verbose: bool = True, jobs: int = 1, match: str | None = None) -> int:
             failed += not ok
             mark = "PASS" if ok else "FAIL"
         if verbose:
-            print(f"[{mark}] {name}")
+            print(f"[{mark}] {name}  [{secs:.0f}s]")
             print(f"       expect: {expectation}")
             print(f"       got:    {detail}")
             if xfail is not None:
