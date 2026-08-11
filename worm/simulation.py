@@ -89,6 +89,19 @@ class SimConfig:
     dt: float = 0.02              # body/world timestep, seconds
     neural_substeps: int = 20     # neural steps per body step (1 ms each)
     neural_noise: float = 0.02    # mV per neural step
+    # DO NOT lower this without the issue #12 readout work. It is not merely
+    # uncalibrated, it is load-bearing through SATURATION: at 55 pA the tonic
+    # gas sensors (URX, AQR, PQR at 21% oxygen) sit parked at their rails,
+    # where constant output transmits nothing. At physiological amplitudes
+    # they land mid-range at maximum gain and amplify membrane noise into the
+    # command balance, becoming 98% of the sensory noise floor and burying
+    # touch discrimination (scripts/noise_audit.py, both arms measured).
+    # Physiological receptor potentials were implemented twice and reverted
+    # twice; the terminal constraint is that the single-threshold command
+    # readout cannot fit mec-10 partiality, posterior silence and harsh
+    # silence inside a 1.7x signal-to-floor ratio. The fix is a
+    # pathway-discriminating readout, which belongs to the same redesign as
+    # issue #7's escape machinery; until then this constant stays.
     sensory_amplitude: float = 55.0
     # Reversal fires when AVA/AVD/AVE rise this far above their own recent
     # average, not above the naive resting value. Tonic sensory input (21%
