@@ -983,26 +983,49 @@ def _swim():
 
 @check("chemotaxis discriminates salt-blind mutants",
        "wild type chemotaxes up a salt gradient; che-1 (no ASE) does not",
-       "Ward 1973; Bargmann & Horvitz 1991; Pierce-Shimomura et al. 1999")
+       "Ward 1973; Bargmann & Horvitz 1991; Pierce-Shimomura et al. 1999",
+       xfail="honest geometry took the pass away: on the old 60x44 torus "
+             "arena the near band was 30% of the surface and a blind "
+             "ballistic walker scored CI 0.6-0.7 by wrapping through it, "
+             "which is what the earlier pass was made of. On the open "
+             "field the wild type does not yet out-drift a blind animal: "
+             "klinokinesis alone cannot bias a walk whose pirouettes "
+             "reorient only ~26-42 degrees (issue #19 owns the turn "
+             "sharpness cap), and the klinotaxis steering pathway has no "
+             "demonstrated salt gain (issue #7 readout scope)")
 def _chemo():
     from .assays import run_assay
     # Six minutes, not two: with runs ending every ~25 s the walk is
     # diffusive, and over two minutes the band score is set by the seeded
     # start geometry alone (every genotype scored an identical 0.333).
     # Real CI assays run tens of minutes for the same reason.
+    # Five replicates per arm, not three: a blind mutant scores on start
+    # geometry alone, and with three single-animal runs its CI null spans
+    # 0.26 to 0.73 across sessions. Population assays use dozens of
+    # animals for exactly this reason.
     wt = run_assay("chemotaxis", knockouts=(), seed=0,
-                   minutes=6.0, replicates=3, workers=3)["result"]
+                   minutes=6.0, replicates=5, workers=5)["result"]
     ko = run_assay("chemotaxis", knockouts=("che-1",), seed=0,
-                   minutes=6.0, replicates=3, workers=3)["result"]
+                   minutes=6.0, replicates=5, workers=5)["result"]
     # The discrimination must clear both bars: wild type approaches, and the
     # mutant does measurably worse. Thresholds are set just above what pure
     # geometry scores, so passing requires genuine gradient-guided behaviour.
-    wt_min_ci, min_gap = 0.30, 0.25
-    ok = (wt["chemotaxis_index"] >= wt_min_ci
-          and wt["chemotaxis_index"] - ko["chemotaxis_index"] >= min_gap)
-    return ok, (f"wild type CI {wt['chemotaxis_index']} "
-                f"({wt['reversals_mean']} reversals/run), "
-                f"che-1 CI {ko['chemotaxis_index']}")
+    # Discrimination runs on DRIFT toward the source, not the band CI:
+    # on this torus arena a blind single animal occupies the near band
+    # easily (che-1 banded CI reached 0.6-0.7 over five starts), while its
+    # expected drift up the gradient is zero. Drift is the single-animal
+    # equivalent of the population index (Pierce-Shimomura 1999 scores
+    # gradient-relative displacement the same way). The banded CI is still
+    # reported for comparison with plate assays.
+    wt_min_mm, min_gap_mm = 2.5, 2.5
+    ok = (wt["approached_mm_mean"] >= wt_min_mm
+          and wt["approached_mm_mean"] - ko["approached_mm_mean"]
+          >= min_gap_mm)
+    return ok, (f"wild type approached {wt['approached_mm_mean']} mm "
+                f"(CI {wt['chemotaxis_index']}, "
+                f"{wt['reversals_mean']} reversals/run) vs che-1 "
+                f"{ko['approached_mm_mean']} mm (CI "
+                f"{ko['chemotaxis_index']})")
 
 
 @check("ablating the command interneurons reproduces their ablation phenotypes",
@@ -1310,7 +1333,7 @@ def main(verbose: bool = True, jobs: int = 1, match: str | None = None) -> int:
         # seconds of simulated behaviour per check; anything unlisted is
         # cheap. Update alongside the checks; the printed [Ns] timings are
         # the measurement.
-        est = {"spontaneously": 600, "local search": 1500, "omega": 300, "vigor": 90, "sharpness": 180, "habituates": 340, "probability": 340,
+        est = {"spontaneously": 600, "local search": 1500, "omega": 300, "vigor": 90, "chemotaxis": 2400, "sharpness": 180, "habituates": 340, "probability": 340,
                "tyramine": 130, "gentle touch": 90, "mec-10": 80,
                "ablation": 80, "swims": 60, "crawls": 60, "unc-": 60,
                "vab-7": 60, "circles": 60, "forward": 60, "muscles": 70,

@@ -40,12 +40,15 @@ def _torus_dist(a: np.ndarray, b: np.ndarray, width: float, height: float) -> fl
 # single-animal version here is a time-fraction analogue, so the geometry is a
 # modelling choice -- but a named one, expressed relative to the arena so it
 # cannot silently drift from the physics.
-CHEMO_ARENA = (60.0, 44.0)          # assay plate, mm (several body lengths across)
-CHEMO_SOURCE_XY = (16.0, 0.0)       # peak of the gradient, off-centre
-CHEMO_SOURCE_SIGMA_MM = 14.0        # Gaussian spread of the salt source
-CHEMO_START_RING_MM = 28.0          # animals start on a ring this far from the peak
-CHEMO_NEAR_BAND_MM = 16.0           # inside this counts as "at the peak"
-CHEMO_FAR_BAND_MM = 32.0            # beyond this counts as "avoiding the peak"
+CHEMO_ARENA = (150.0, 110.0)        # open field: too large to wrap in a run,
+                                    # because on a small torus the near band was
+                                    # 30% of the arena and a blind ballistic
+                                    # walker scored CI 0.6-0.7 on wrap-throughs
+CHEMO_SOURCE_XY = (75.0, 55.0)      # peak central, starts ring around it
+CHEMO_SOURCE_SIGMA_MM = 25.0        # Gaussian spread of the salt source
+CHEMO_START_RING_MM = 35.0          # animals start on a ring this far from the peak
+CHEMO_NEAR_BAND_MM = 12.0           # inside this counts as "at the peak"
+CHEMO_FAR_BAND_MM = 30.0            # beyond this counts as "avoiding the peak"
 CHEMO_RUN_MINUTES = 5.0             # per replicate
 CHEMO_REPLICATES = 6                # randomized starts/headings per condition
 

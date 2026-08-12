@@ -85,10 +85,14 @@ food, fewer on food, Gray et al. 2005; `goa-1` roughly triples it, Segalat et
 al. 1995). Chemotaxis is a biased random walk on top of that machinery: the
 pirouette rate is multiplied down when the animal climbs a salt gradient and
 up when it descends, with the measured 3x asymmetry (Pierce-Shimomura et al.
-1999) and an ASE-style seconds-scale integration of dC/dt. The coupling is
-gated by the real ASE genome gains, so `che-1` and `tax-4` abolish chemotaxis
-by mechanism. The chemotaxis index lands at 0.63 against the published 0.6 to
-0.9 without being fitted to it.
+1999) and an ASE-style seconds-scale integration of dC/dt, gated by the real
+ASE genome gains so `che-1` and `tax-4` silence it by mechanism. Honest
+accounting: an earlier chemotaxis-index pass turned out to be an arena
+artifact (on a small toroidal plate the scoring band covered 30% of the
+surface, and a blind walker scored 0.6-0.7 by wrapping through it). On the
+corrected open-field assay the biased walk is not yet strong enough to
+out-drift a blind animal, because pirouettes that reorient only ~26 degrees
+cannot re-randomize the walk; that cap is a tracked expected failure.
 
 The search itself has a history: dopamine carries the memory of food. In the
 minutes after leaving a lawn the reversal rate runs at the local-search value,
@@ -292,7 +296,7 @@ the model knows and what it assumes stays visible.
 
 `worm validate` runs 45 checks against published measurements: 32 behavioural
 (the animal is run and measured) and 13 consistency checks (parameter and data
-invariants). 35 pass. Ten are registered expected failures, each naming the
+invariants). 34 pass. Eleven are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
@@ -312,7 +316,6 @@ activation also leads curvature by 8 degrees where the animal holds about 45.
 | Crawling speed | 0.239 mm/s | 0.20 +/- 0.04 mm/s |
 | Undulation amplitude | 21.2% body length | 19.3% |
 | Spontaneous reversals off food | 2.3 /min | ~2 /min, on food lower, `goa-1` higher |
-| Chemotaxis index, salt | 0.63 (`che-1` 0.26) | 0.6 to 0.9 |
 | Local search vs dispersal | 1.8 vs 0.8 /min, `cat-2` stays at 0.4 | several-fold decay over ~30 min, dopamine-dependent |
 | Embryogenesis | 14.2 h | 14.2 h |
 | Hatch to adult | 50.8 h | 50.67 +/- 1.95 h |
