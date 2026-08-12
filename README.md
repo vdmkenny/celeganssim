@@ -77,6 +77,19 @@ reversal-biased in the wiring; PVD tiles the rest of the body and favours
 forward. Both are MEC-4 independent, so harsh responses survive in `mec-4`
 mutants.
 
+### Exploration and chemotaxis
+
+Left alone, the animal reverses on its own: a generator injects pulses into
+the real backward command cells at the measured rates (about 2 per minute off
+food, fewer on food, Gray et al. 2005; `goa-1` roughly triples it, Segalat et
+al. 1995). Chemotaxis is a biased random walk on top of that machinery: the
+pirouette rate is multiplied down when the animal climbs a salt gradient and
+up when it descends, with the measured 3x asymmetry (Pierce-Shimomura et al.
+1999) and an ASE-style seconds-scale integration of dC/dt. The coupling is
+gated by the real ASE genome gains, so `che-1` and `tax-4` abolish chemotaxis
+by mechanism. The chemotaxis index lands at 0.63 against the published 0.6 to
+0.9 without being fitted to it.
+
 ### Genetics
 
 Thirty-one loci are mapped onto the subsystems their products implement.
@@ -157,7 +170,7 @@ NervousSystem    448 cells, graded-potential ODEs over the real connectome
       |
 Simulation       reads command interneurons -> behavioural state machine
       |
-Muscle pacer     the one scripted current -> 95 REAL muscle cells
+Muscle pacer     the scripted wave current -> 95 REAL muscle cells
       |
 Body             muscle calcium -> force -> viscoelastic body
       |
@@ -262,16 +275,16 @@ tagged measured, published, tuned or scripted, so the difference between what
 the model knows and what it assumes stays visible.
 
 `worm validate` runs 41 checks against published measurements: 28 behavioural
-(the animal is run and measured) and 12 consistency checks (parameter and data
-invariants). 31 pass. Nine are registered expected failures, each naming the
+(the animal is run and measured) and 13 consistency checks (parameter and data
+invariants). 32 pass. Nine are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
-([issue #10](https://github.com/vdmkenny/celeganssim/issues/10)). Without
-spontaneous reversals there are no pirouettes, so chemotaxis cannot
-discriminate salt-blind mutants, and `goa-1` loses to constant reversing the
-speed its deeper, faster bends would otherwise gain
-([issue #6](https://github.com/vdmkenny/celeganssim/issues/6)). Muscle
+([issue #10](https://github.com/vdmkenny/celeganssim/issues/10)). The animal
+now reverses spontaneously at the measured rates and chemotaxes by biased
+random walk, but `goa-1` still loses to its constant reversing the speed its
+deeper, faster bends would otherwise gain, an oscillator-depth gap owned by
+[issue #10](https://github.com/vdmkenny/celeganssim/issues/10). Muscle
 activation also leads curvature by 8 degrees where the animal holds about 45.
 
 | Check | Model | Published |
@@ -282,6 +295,8 @@ activation also leads curvature by 8 degrees where the animal holds about 45.
 | VA5 / VB6 resting potential | -71.7 / -53.2 mV | -71.7 / -53.2 mV |
 | Crawling speed | 0.239 mm/s | 0.20 +/- 0.04 mm/s |
 | Undulation amplitude | 21.2% body length | 19.3% |
+| Spontaneous reversals off food | 2.3 /min | ~2 /min, on food lower, `goa-1` higher |
+| Chemotaxis index, salt | 0.63 (`che-1` 0.26) | 0.6 to 0.9 |
 | Embryogenesis | 14.2 h | 14.2 h |
 | Hatch to adult | 50.8 h | 50.67 +/- 1.95 h |
 | Adult lifespan | mean 15.9 d, sd 3.3 d over a cohort | 15.2 +/- 3.6 d |
@@ -333,6 +348,13 @@ potentials, developmental timings, body sizes, brood size, lifespan.
   surface that keeps every assay readable, and
   [docs/emergent-cpg.md](docs/emergent-cpg.md) records the attempts to shrink
   it further.
+- **Initiative is generated, not emergent.** Spontaneous reversals come from
+  a Poisson generator at the measured rates injected into the real backward
+  command cells, and klinokinesis scales that rate with the measured
+  asymmetry as a stand-in for the ASE-to-command loop the graded network
+  cannot yet close ([issue #7](https://github.com/vdmkenny/celeganssim/issues/7)).
+  Both are labelled scripted. The decision machinery they feed is real, which
+  is why `che-1`, `tax-4` and `goa-1` move these behaviours by mechanism.
 - **Muscle spikes are not reached from synaptic input.** Muscle carries the
   measured calcium action potential, but crossing its -10 mV threshold needs
   about 2.4 nS of extra excitatory conductance, close to the 2.26 nS implied
@@ -462,6 +484,8 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 **Chemosensation and navigation**
 - [Chalasani et al. (2007), Nature 450:63](https://doi.org/10.1038/nature06292)
 - [Pierce-Shimomura, Morse & Lockery (1999), J. Neurosci. 19:9557](https://doi.org/10.1523/JNEUROSCI.19-21-09557.1999)
+- [Gray, Hill & Bargmann (2005), PNAS 102:3184](https://doi.org/10.1073/pnas.0409009101) (spontaneous reversal rates on and off food)
+- [Segalat, Elkes & Kaplan (1995), Science 267:1648](https://doi.org/10.1126/science.7886454) (goa-1 hyperreversal)
 - [Iino & Yoshida (2009), J. Neurosci. 29:5370](https://doi.org/10.1523/JNEUROSCI.3633-08.2009)
 - [Gray, Hill & Bargmann (2005), PNAS 102:3184](https://doi.org/10.1073/pnas.0409009101)
 - [Sawin, Ranganathan & Horvitz (2000), Neuron 26:619](https://doi.org/10.1016/S0896-6273(00)81199-X)

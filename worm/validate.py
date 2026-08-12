@@ -790,7 +790,7 @@ def _egl30():
              "and ~7 omega turns in a 45 s run against wild type's zero, and "
              "reversals subtract displacement. The undulation is hyperactive; "
              "the trajectory is not. Closing this needs the spontaneous "
-             "reversal rate to be right (issue #6), not the CPG (issue #10)")
+             "deeper, faster bends the oscillator does not model; the reversal rate itself is now right (issue #6 closed), so the residual is oscillator depth (issue #10)")
 def _goa1():
     wt, ko = gait(), gait(knockouts=["goa-1"])
     return ko["amplitude"] > wt["amplitude"] and ko["speed"] > wt["speed"] * 0.95, \
