@@ -1172,6 +1172,64 @@ def _omega_coupling():
                 f"reversals (the old coin was a flat 0.75)")
 
 
+@check("harsh pokes latch more escape vigor than gentle ones",
+       "the backward drive is graded by the command excess latched at "
+       "reversal onset, so a harsh poke stores more vigor than a gentle one",
+       "Kato et al. 2015 Cell 163:656 (AVA transient at onset predicts the "
+       "reversal); Kawano et al. 2011 Neuron 72:572")
+def _vigor():
+    def latched(strength, seed):
+        s = _quiet(_sim(seed=seed))
+        for _ in range(500):
+            s.step()
+        s.env.poke("anterior", strength, duration=0.4)
+        for _ in range(int(4.0 / s.cfg.dt)):
+            s.step()
+            if s.state.behavior == "reversal":
+                return s.state.reversal_vigor
+        return 0.0
+    g = float(np.mean([latched(1.0, sd) for sd in (0, 1)]))
+    h = float(np.mean([latched(2.5, sd) for sd in (0, 1)]))
+    return (h > g > 0.0), f"latched vigor gentle {g:.2f}, harsh {h:.2f}"
+
+
+@check("the omega turn reorients as sharply as the real one",
+       "post-omega heading change is far larger than a plain reversal exit "
+       "(Gray 2005: omega turns sharply redirect the animal, on the order "
+       "of 140 degrees)",
+       "Gray, Hill & Bargmann 2005 PNAS 102:3184; Broekmans et al. 2016 "
+       "eLife 5:e17227",
+       xfail="the muscle-target range cannot hold a head-past-tail coil and "
+             "a propagating wave at once: the best wave-alive coil reaches "
+             "26 degrees against 42 for a plain exit; a 140 degree turn in "
+             "a 2 s crawl needs a turn radius near a sixth of a body "
+             "length (issue #19)")
+def _omega_sharpness():
+    def episode(seed):
+        s = _quiet(_sim(seed=seed))
+        for _ in range(500):
+            s.step()
+        n = s.body.world_nodes(); import numpy as _np
+        a0 = float(_np.degrees(_np.arctan2(*(n[0] - n[-1])[::-1])))
+        om0 = s.state.omega_count
+        s.env.poke("anterior", 2.5, duration=0.4)
+        for _ in range(int(14.0 / s.cfg.dt)):
+            s.step()
+        n = s.body.world_nodes()
+        a1 = float(_np.degrees(_np.arctan2(*(n[0] - n[-1])[::-1])))
+        d = abs(a1 - a0)
+        return min(d, 360.0 - d), s.state.omega_count > om0
+    oms, plains = [], []
+    for sd in range(6):
+        d, om = episode(sd)
+        (oms if om else plains).append(d)
+    om_mean = float(np.mean(oms)) if oms else 0.0
+    pl_mean = float(np.mean(plains)) if plains else 0.0
+    ok = bool(oms) and om_mean >= 90.0 and om_mean > pl_mean
+    return ok, (f"omega exits {om_mean:.0f} deg (n={len(oms)}) vs plain "
+                f"{pl_mean:.0f} deg (n={len(plains)})")
+
+
 @check("leaving food starts local search, and dopamine loss removes it",
        "reversal rate in the minutes after leaving food is at least twice "
        "the long-starved dispersal rate; cat-2, which cannot make dopamine, "
@@ -1252,7 +1310,7 @@ def main(verbose: bool = True, jobs: int = 1, match: str | None = None) -> int:
         # seconds of simulated behaviour per check; anything unlisted is
         # cheap. Update alongside the checks; the printed [Ns] timings are
         # the measurement.
-        est = {"spontaneously": 600, "local search": 1500, "omega": 300, "habituates": 340, "probability": 340,
+        est = {"spontaneously": 600, "local search": 1500, "omega": 300, "vigor": 90, "sharpness": 180, "habituates": 340, "probability": 340,
                "tyramine": 130, "gentle touch": 90, "mec-10": 80,
                "ablation": 80, "swims": 60, "crawls": 60, "unc-": 60,
                "vab-7": 60, "circles": 60, "forward": 60, "muscles": 70,

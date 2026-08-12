@@ -125,6 +125,18 @@ SPONT_PULSE_S = 1.2          # order of the behavioural bout trigger, well
 # The piecewise-linear curve below is read off their figure, so the values
 # are approximate to the plot and tagged as such. A backward bend lasts
 # half an undulation period at the pacing frequency.
+# Graded escape drive (see the reversal branch of the motor-pool logic):
+# at threshold the backward drive starts at BASE and gains PER_THRESHOLD
+# for each additional threshold-worth of command excess, capped at MAX.
+# The omega ventral sweep: bias strength and duration (cfg.omega_s) are
+# tuned together to the measured post-omega reorientation (Gray, Hill &
+# Bargmann 2005: omega turns sharply redirect the animal, mean heading
+# change well above a plain reversal exit).
+OMEGA_HEAD_BIAS = 0.35
+OMEGA_COIL_EXTENT_BL = 0.5
+BWD_DRIVE_BASE = 0.80
+BWD_DRIVE_PER_THRESHOLD = 0.15
+BWD_DRIVE_MAX = 1.0
 OMEGA_P_ONE_BEND = 0.15
 OMEGA_P_PER_BEND = 0.3
 OMEGA_P_MAX = 0.9
@@ -182,7 +194,7 @@ class SimConfig:
     baseline_tau_s: float = 8.0
     reversal_min_s: float = 0.9
     reversal_max_s: float = 4.0
-    omega_s: float = 0.9
+    omega_s: float = 2.0
     refractory_s: float = 0.6
     tonic_forward: float = 0.62   # baseline AVB drive -> spontaneous forward
     command_gain: float = 9.0
@@ -266,6 +278,7 @@ class SimState:
     state_time: float = 0.0
     reversal_count: int = 0
     omega_count: int = 0
+    reversal_vigor: float = 0.0
     distance: float = 0.0
     trail: list = field(default_factory=list)
 
@@ -473,7 +486,18 @@ class WormSimulation:
         v_target = np.clip(exc * (0.5 - 0.5 * wave) - inh * (0.5 + 0.5 * wave),
                            0.0, 1.0)
         target = np.where(self._mus_dorsal, d_target, v_target)
-        bias = head_bias * np.clip(1.0 - self._mus_u / HEAD_STEER_EXTENT_BL,
+        steer_extent = HEAD_STEER_EXTENT_BL
+        if self.state.behavior == "omega":
+            # An omega turn is not steering: the whole anterior body coils
+            # ventrally (Gray, Hill & Bargmann 2005; Broekmans et al. 2016
+            # eLife 5:e17227 quantify the deep body bend). The same bias
+            # pathway is widened from the steering head to the coil extent,
+            # and the target clip saturates it into the coil. Extent is a
+            # GUESS from omega videography (about the anterior half);
+            # together with cfg.omega_s it is tuned to the measured
+            # post-omega reorientation.
+            steer_extent = OMEGA_COIL_EXTENT_BL
+        bias = head_bias * np.clip(1.0 - self._mus_u / steer_extent,
                                    0.0, 1.0)
         target = np.clip(target + np.where(self._mus_dorsal, bias, -bias),
                          0.0, 1.0)
@@ -801,7 +825,16 @@ class WormSimulation:
         backward = cfg.command_gain * (bwd_cmd + drive_A)
 
         if self.state.behavior == "reversal":
-            forward, backward = 0.05, 0.95
+            # Escape vigor is graded, not a constant: A-class and AVA
+            # activity set backward speed (Kawano et al. 2011 Neuron
+            # 72:572; Kato et al. 2015 Cell 163:656), so the backward
+            # drive follows how far the command balance sits above the
+            # reversal threshold. The relationship is the published one;
+            # base, gain and cap are tuned (see BWD_DRIVE_BASE).
+            forward = 0.05
+            backward = min(BWD_DRIVE_MAX,
+                           BWD_DRIVE_BASE
+                           + BWD_DRIVE_PER_THRESHOLD * self.state.reversal_vigor)
         elif self.state.behavior == "omega":
             forward, backward = 0.85, 0.05
 
@@ -943,6 +976,12 @@ class WormSimulation:
             if bwd_cmd > cfg.reversal_threshold:
                 st.behavior, st.state_time = "reversal", 0.0
                 st.reversal_count += 1
+                # Vigor is latched at onset: the size of the AVA transient
+                # at reversal entry predicts the speed and extent of the
+                # whole retreat (Kato et al. 2015 Cell 163:656), and the
+                # instantaneous balance decays during the reversal, which
+                # would otherwise read long escapes as weak ones.
+                st.reversal_vigor = bwd_cmd / cfg.reversal_threshold - 1.0
         elif st.behavior == "reversal":
             done = st.state_time > cfg.reversal_min_s and bwd_cmd <= cfg.reversal_threshold
             if done or st.state_time > cfg.reversal_max_s:
@@ -975,7 +1014,7 @@ class WormSimulation:
         preference of real omega turns.
         """
         if self.state.behavior == "omega":
-            strength = 0.85 * self.genome.global_scale("omega_turn")
+            strength = OMEGA_HEAD_BIAS * self.genome.global_scale("omega_turn")
             return -float(np.clip(strength, 0.0, 1.0))
         d = float(np.mean(act[self.i_hd])) if len(self.i_hd) else 0.5
         v = float(np.mean(act[self.i_hv])) if len(self.i_hv) else 0.5
