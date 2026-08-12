@@ -62,6 +62,7 @@ what the model knows and what it assumes.
 | eat-2 is dietary restriction by mechanism | measured pumping deficit, ~0.2x (Raizen, Lee & Avery 1995; McKay et al. 2004), driving real intake | `pumping_rate(pump_scale=...)` |
 | Spontaneous reversals at measured rates; food and goa-1 modulate them | measured rates (Gray et al. 2005; Segalat 1995), **scripted** generator: Poisson pulses into the real backward command cells | check "the animal reverses spontaneously" |
 | Chemotaxis by biased random walk, CI in the published band; che-1 abolishes it | measured coupling shape (Pierce-Shimomura et al. 1999), **scripted** stand-in for the ASE-to-command loop (issue #7), gated by real ASE genome gains | check "chemotaxis discriminates salt-blind mutants" |
+| Local search decays to dispersal after leaving food; dopamine required | measured endpoints (Gray et al. 2005), decay constant a labelled GUESS through their time course; cat-2 by mechanism (Hills et al. 2004) | check "leaving food starts local search" |
 
 ## Where the honest edges are enforced
 

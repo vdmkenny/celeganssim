@@ -102,8 +102,11 @@ GENE_EFFECTS: dict[str, GeneEffect] = {
         "cat-2",
         "tyrosine hydroxylase - rate-limiting step for dopamine",
         "No dopamine. Loses the basal slowing response on food (mechanosensory "
-        "detection of a bacterial lawn).",
+        "detection of a bacterial lawn) and area-restricted search: the "
+        "reversal rate never elevates above dispersal after leaving food "
+        "(Hills, Brockie & Maricq 2004 J Neurosci 24:1217).",
         neurotransmitter_scale={"Dopamine": 0.0},
+        global_scale={"area_restricted_search": 0.0},
     ),
     "tdc-1": GeneEffect(
         "tdc-1",

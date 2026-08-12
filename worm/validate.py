@@ -1118,6 +1118,36 @@ def _death():
                 f"mean {mean:.1f} d, sd {sd:.1f} d, causes {sorted(causes)}")
 
 
+@check("leaving food starts local search, and dopamine loss removes it",
+       "reversal rate in the minutes after leaving food is at least twice "
+       "the long-starved dispersal rate; cat-2, which cannot make dopamine, "
+       "never elevates above dispersal",
+       "Gray, Hill & Bargmann 2005 PNAS 102:3184 (local search decays to "
+       "dispersal); Hills, Brockie & Maricq 2004 J Neurosci 24:1217 "
+       "(dopamine-deficient animals skip local search)")
+def _ars():
+    def rate(ko=(), age_s=0.0, seeds=(0, 1)):
+        counts = []
+        for sd in seeds:
+            s = _sim(ko, seed=sd)
+            s.set_food_memory_age(age_s)
+            for _ in range(int(10.0 / s.cfg.dt)):
+                s.step()
+            r0 = s.state.reversal_count
+            for _ in range(int(240.0 / s.cfg.dt)):
+                s.step()
+            counts.append(s.state.reversal_count - r0)
+        return float(np.mean(counts)) / 4.0
+    fresh = rate()
+    starved = rate(age_s=1800.0)
+    cat2 = rate(ko=("cat-2",))
+    ok = (fresh >= 2.0 * max(starved, 0.1) and starved <= 0.9
+          and cat2 <= 0.6 * fresh and cat2 <= starved + 0.5)
+    return ok, (f"fresh off food {fresh:.1f}/min, starved 30 min "
+                f"{starved:.1f}/min, cat-2 fresh {cat2:.1f}/min "
+                f"(elevation needs dopamine)")
+
+
 @check("daf-2 longevity requires daf-16",
        "daf-2 loss roughly doubles lifespan, and removing daf-16 as well "
        "abolishes the extension completely; eat-2 does not need daf-16",
@@ -1168,7 +1198,7 @@ def main(verbose: bool = True, jobs: int = 1, match: str | None = None) -> int:
         # seconds of simulated behaviour per check; anything unlisted is
         # cheap. Update alongside the checks; the printed [Ns] timings are
         # the measurement.
-        est = {"spontaneously": 600, "habituates": 340, "probability": 340,
+        est = {"spontaneously": 600, "local search": 1500, "habituates": 340, "probability": 340,
                "tyramine": 130, "gentle touch": 90, "mec-10": 80,
                "ablation": 80, "swims": 60, "crawls": 60, "unc-": 60,
                "vab-7": 60, "circles": 60, "forward": 60, "muscles": 70,

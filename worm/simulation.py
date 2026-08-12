@@ -109,6 +109,17 @@ SPONT_PULSE_S = 1.2          # order of the behavioural bout trigger, well
 # saturates at small |dC/dt|, and a higher setting leaves the multiplier
 # in its linear region for most headings (measured 0.55x/1.2x instead of
 # the 3x asymmetry). Floor and ceiling bound the multiplier to the measured 3x.
+# Area-restricted search (Gray, Hill & Bargmann 2005 PNAS 102:3184, Fig. 1):
+# the reversal rate is highest in the minutes just after leaving food (the
+# cfg.spont_rev_per_min_off_food value IS that local-search rate) and decays
+# to a low dispersal rate by 30-40 min. The dispersal endpoint is measured
+# (about 0.3/min); the exponential form and time constant are a GUESS drawn
+# through Gray's time course, which has most of the decay done by ~15 min.
+# Dopamine carries the food memory: cat-2 animals never elevate above
+# dispersal while their baseline stays normal (Hills, Brockie & Maricq 2004
+# J Neurosci 24:1217), wired via the genome scale "area_restricted_search".
+ARS_DISPERSAL_PER_MIN = 0.3
+ARS_TAU_S = 600.0
 KLINO_SAT_DCDT_PER_MIN = 0.15
 KLINO_TAU_S = 4.0
 KLINO_GAIN = math.log(3.0) / KLINO_SAT_DCDT_PER_MIN
@@ -460,21 +471,38 @@ class WormSimulation:
             * (target - exc * RECTIFIED_WAVE_MEAN)
         return I
 
+    def set_food_memory_age(self, seconds: float) -> None:
+        """Assay preparation: the animal left food this long ago.
+
+        Lets a check measure the long-starved dispersal state without
+        simulating thirty empty minutes first.
+        """
+        self._food_memory_s = self.state.t - seconds
+
     def spontaneous_current(self) -> np.ndarray:
         """Scripted upstate generator: seeded Poisson pulses into AVA/AVE.
 
         Statistics are the measured ones (see SPONT_PULSE_PA block); the
         genome hook lets goa-1 raise the rate, which is its measured
         phenotype (Segalat, Elkes & Kaplan 1995 Science 267:1648:
-        hyperreversal), and food state selects between the measured off-food
-        local-search rate and the on-food guess.
+        hyperreversal), and food state selects between
+        the on-food guess and an off-food rate that decays from local
+        search to dispersal as the dopamine-borne food memory ages (see
+        ARS_DISPERSAL_PER_MIN).
         """
         I = np.zeros(self.conn.n)
         cfg = self.cfg
         t = self.state.t
         on_food = self.env.on_food(self.body.world_nodes()[0]) > 0.01
-        per_min = (cfg.spont_rev_per_min_on_food if on_food
-                   else cfg.spont_rev_per_min_off_food)
+        if on_food:
+            per_min = cfg.spont_rev_per_min_on_food
+            self._food_memory_s = t
+        else:
+            since = t - self._food_memory_s
+            elev = cfg.spont_rev_per_min_off_food - ARS_DISPERSAL_PER_MIN
+            elev *= self.genome.global_scale("area_restricted_search")
+            per_min = ARS_DISPERSAL_PER_MIN \
+                + elev * math.exp(-since / ARS_TAU_S)
         per_min *= self.genome.global_scale("spontaneous_reversal")
         if per_min <= 0.0:
             return I
@@ -603,6 +631,9 @@ class WormSimulation:
         self._spont_until_s = 0.0
         self._spont_rate = 0.0
         self._klino_c_prev = None
+        # Worms are raised on food, so a fresh animal has just left it:
+        # local search from t=0. Assays override with set_food_memory_age.
+        self._food_memory_s = 0.0
         self._klino_dcdt = 0.0
         self.ns.reset()
         self.body.reset(x, y, heading)

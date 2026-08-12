@@ -37,7 +37,7 @@ anything.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 41 checks against published measurements, in parallel
+worm validate         # 42 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -89,6 +89,12 @@ up when it descends, with the measured 3x asymmetry (Pierce-Shimomura et al.
 gated by the real ASE genome gains, so `che-1` and `tax-4` abolish chemotaxis
 by mechanism. The chemotaxis index lands at 0.63 against the published 0.6 to
 0.9 without being fitted to it.
+
+The search itself has a history: dopamine carries the memory of food. In the
+minutes after leaving a lawn the reversal rate runs at the local-search value,
+then decays to a low dispersal rate over tens of minutes (Gray et al. 2005),
+and `cat-2`, which cannot make dopamine, never elevates above dispersal while
+its baseline stays intact (Hills et al. 2004).
 
 ### Genetics
 
@@ -242,7 +248,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 41 checks: 28 behavioural, 13 consistency, gaps as expected failures |
+| `worm/validate.py` | 42 checks: 29 behavioural, 13 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry, provenance tags enforced by a check |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -274,9 +280,9 @@ rather than making it, so are not modelled as GABAergic.
 tagged measured, published, tuned or scripted, so the difference between what
 the model knows and what it assumes stays visible.
 
-`worm validate` runs 41 checks against published measurements: 28 behavioural
+`worm validate` runs 42 checks against published measurements: 29 behavioural
 (the animal is run and measured) and 13 consistency checks (parameter and data
-invariants). 32 pass. Nine are registered expected failures, each naming the
+invariants). 33 pass. Nine are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
@@ -297,6 +303,7 @@ activation also leads curvature by 8 degrees where the animal holds about 45.
 | Undulation amplitude | 21.2% body length | 19.3% |
 | Spontaneous reversals off food | 2.3 /min | ~2 /min, on food lower, `goa-1` higher |
 | Chemotaxis index, salt | 0.63 (`che-1` 0.26) | 0.6 to 0.9 |
+| Local search vs dispersal | 1.8 vs 0.8 /min, `cat-2` stays at 0.4 | several-fold decay over ~30 min, dopamine-dependent |
 | Embryogenesis | 14.2 h | 14.2 h |
 | Hatch to adult | 50.8 h | 50.67 +/- 1.95 h |
 | Adult lifespan | mean 15.9 d, sd 3.3 d over a cohort | 15.2 +/- 3.6 d |
@@ -484,7 +491,8 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 **Chemosensation and navigation**
 - [Chalasani et al. (2007), Nature 450:63](https://doi.org/10.1038/nature06292)
 - [Pierce-Shimomura, Morse & Lockery (1999), J. Neurosci. 19:9557](https://doi.org/10.1523/JNEUROSCI.19-21-09557.1999)
-- [Gray, Hill & Bargmann (2005), PNAS 102:3184](https://doi.org/10.1073/pnas.0409009101) (spontaneous reversal rates on and off food)
+- [Gray, Hill & Bargmann (2005), PNAS 102:3184](https://doi.org/10.1073/pnas.0409009101) (spontaneous reversal rates on and off food; local search decays to dispersal)
+- [Hills, Brockie & Maricq (2004), J. Neurosci. 24:1217](https://doi.org/10.1523/JNEUROSCI.1569-03.2004) (area-restricted search requires dopamine)
 - [Segalat, Elkes & Kaplan (1995), Science 267:1648](https://doi.org/10.1126/science.7886454) (goa-1 hyperreversal)
 - [Iino & Yoshida (2009), J. Neurosci. 29:5370](https://doi.org/10.1523/JNEUROSCI.3633-08.2009)
 - [Gray, Hill & Bargmann (2005), PNAS 102:3184](https://doi.org/10.1073/pnas.0409009101)
