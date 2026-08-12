@@ -60,11 +60,12 @@ what the model knows and what it assumes.
 | Development, brood, lifespan timings | measured (Byerly 1976; Sulston 1983; Faerberg 2022; Hodgkin & Barnes 1991; Huang 2004) | their named checks |
 | daf-2 longevity requires daf-16; eat-2 does not | measured epistasis (Kenyon 1993; Lakowski & Hekimi 1998) | check "daf-2 longevity requires daf-16" |
 | eat-2 is dietary restriction by mechanism | measured pumping deficit, ~0.2x (Raizen, Lee & Avery 1995; McKay et al. 2004), driving real intake | `pumping_rate(pump_scale=...)` |
-| Spontaneous exploration | NOT claimed: no spontaneous reversals, so no pirouettes and no chemotaxis discrimination | expected failures, issue #6 |
+| Spontaneous reversals at measured rates; food and goa-1 modulate them | measured rates (Gray et al. 2005; Segalat 1995), **scripted** generator: Poisson pulses into the real backward command cells | check "the animal reverses spontaneously" |
+| Chemotaxis by biased random walk, CI in the published band; che-1 abolishes it | measured coupling shape (Pierce-Shimomura et al. 1999), **scripted** stand-in for the ASE-to-command loop (issue #7), gated by real ASE genome gains | check "chemotaxis discriminates salt-blind mutants" |
 
 ## Where the honest edges are enforced
 
-Ten expected failures, each citing the issue that owns it (#6, #10, #16,
+Nine expected failures, each citing the issue that owns it (#10, #16,
 #17, #18), report the model's known gaps on every run. A provenance check
 fails the suite if any parameter tagged measured or published lacks a
 citation at its definition. Raw datasets are pinned by SHA256, so upstream
