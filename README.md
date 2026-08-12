@@ -37,7 +37,7 @@ anything.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 42 checks against published measurements, in parallel
+worm validate         # 43 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -95,6 +95,12 @@ minutes after leaving a lawn the reversal rate runs at the local-search value,
 then decays to a low dispersal rate over tens of minutes (Gray et al. 2005),
 and `cat-2`, which cannot make dopamine, never elevates above dispersal while
 its baseline stays intact (Hills et al. 2004).
+
+A reversal ends in an omega turn with a probability that rises with how far
+the animal backed up, read from Gray et al.'s measured curve: rare after a
+single backward bend, near-certain after four. Stronger stimuli hold the
+reversal longer through the command balance itself, so harsh touch earns
+both a longer retreat and a sharper turn without either being scripted to.
 
 ### Genetics
 
@@ -248,7 +254,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 42 checks: 29 behavioural, 13 consistency, gaps as expected failures |
+| `worm/validate.py` | 43 checks: 30 behavioural, 13 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry, provenance tags enforced by a check |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -280,9 +286,9 @@ rather than making it, so are not modelled as GABAergic.
 tagged measured, published, tuned or scripted, so the difference between what
 the model knows and what it assumes stays visible.
 
-`worm validate` runs 42 checks against published measurements: 29 behavioural
+`worm validate` runs 43 checks against published measurements: 30 behavioural
 (the animal is run and measured) and 13 consistency checks (parameter and data
-invariants). 33 pass. Nine are registered expected failures, each naming the
+invariants). 34 pass. Nine are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium

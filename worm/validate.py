@@ -1118,6 +1118,60 @@ def _death():
                 f"mean {mean:.1f} d, sd {sd:.1f} d, causes {sorted(causes)}")
 
 
+@check("omega turns follow long reversals, not a coin",
+       "the probability a reversal ends in an omega turn rises with how far "
+       "the animal backed up: near 0.15 after one backward bend, near 0.9 "
+       "after four; stronger stimuli hold the reversal longer through the "
+       "command balance, and spontaneous (short) reversals therefore end in "
+       "omega rarely",
+       "Gray, Hill & Bargmann 2005 PNAS 102:3184 Fig. 2 (omega probability "
+       "vs reversal length); Chalfie et al. 1985 J Neurosci 5:956 (touch "
+       "strength shapes the escape)")
+def _omega_coupling():
+    s = _quiet(_sim(seed=3))
+    half_period_s = 1.0 / (2.0 * s.body.p.freq_hz)
+    fracs = {}
+    for bends in (1.0, 4.0):
+        n = 0
+        for _ in range(400):
+            s.state.behavior = "reversal"
+            s.state.state_time = bends * half_period_s
+            before = s.state.omega_count
+            s._update_behavior(0.0, 0.0)
+            n += s.state.omega_count - before
+        fracs[bends] = n / 400.0
+
+    def evoked_dur(strength, seed):
+        s = _quiet(_sim(seed=seed))
+        for _ in range(500):
+            s.step()
+        s.env.poke("anterior", strength, duration=0.4)
+        t0 = None
+        for _ in range(400):
+            s.step()
+            if s.state.behavior == "reversal" and t0 is None:
+                t0 = s.state.t
+            if s.state.behavior != "reversal" and t0 is not None:
+                return s.state.t - t0
+        return 0.0
+    gentle = float(np.mean([evoked_dur(1.0, sd) for sd in (0, 1)]))
+    harsh = float(np.mean([evoked_dur(2.5, sd) for sd in (0, 1)]))
+
+    s = _sim(seed=5)
+    for _ in range(int(250.0 / s.cfg.dt)):
+        s.step()
+    spont = (s.state.omega_count / s.state.reversal_count
+             if s.state.reversal_count else 0.0)
+    ok = (0.05 <= fracs[1.0] <= 0.30 and 0.75 <= fracs[4.0] <= 1.0
+          and harsh >= gentle + 0.15
+          and s.state.reversal_count >= 3 and spont <= 0.45)
+    return ok, (f"omega fraction {fracs[1.0]:.2f} at 1 bend, "
+                f"{fracs[4.0]:.2f} at 4; evoked reversal {gentle:.2f} s "
+                f"gentle vs {harsh:.2f} s harsh; spontaneous omega "
+                f"fraction {spont:.2f} over {s.state.reversal_count} "
+                f"reversals (the old coin was a flat 0.75)")
+
+
 @check("leaving food starts local search, and dopamine loss removes it",
        "reversal rate in the minutes after leaving food is at least twice "
        "the long-starved dispersal rate; cat-2, which cannot make dopamine, "
@@ -1198,7 +1252,7 @@ def main(verbose: bool = True, jobs: int = 1, match: str | None = None) -> int:
         # seconds of simulated behaviour per check; anything unlisted is
         # cheap. Update alongside the checks; the printed [Ns] timings are
         # the measurement.
-        est = {"spontaneously": 600, "local search": 1500, "habituates": 340, "probability": 340,
+        est = {"spontaneously": 600, "local search": 1500, "omega": 300, "habituates": 340, "probability": 340,
                "tyramine": 130, "gentle touch": 90, "mec-10": 80,
                "ablation": 80, "swims": 60, "crawls": 60, "unc-": 60,
                "vab-7": 60, "circles": 60, "forward": 60, "muscles": 70,

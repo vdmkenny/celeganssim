@@ -118,6 +118,16 @@ SPONT_PULSE_S = 1.2          # order of the behavioural bout trigger, well
 # Dopamine carries the food memory: cat-2 animals never elevate above
 # dispersal while their baseline stays normal (Hills, Brockie & Maricq 2004
 # J Neurosci 24:1217), wired via the genome scale "area_restricted_search".
+# Omega coupling reads reversal length, not a coin. Gray, Hill & Bargmann
+# 2005 (PNAS 102:3184, Fig. 2): the probability that a reversal terminates
+# in an omega turn rises with the number of backward body bends, from about
+# 0.1-0.2 after a single bend toward near-certainty for long reversals.
+# The piecewise-linear curve below is read off their figure, so the values
+# are approximate to the plot and tagged as such. A backward bend lasts
+# half an undulation period at the pacing frequency.
+OMEGA_P_ONE_BEND = 0.15
+OMEGA_P_PER_BEND = 0.3
+OMEGA_P_MAX = 0.9
 ARS_DISPERSAL_PER_MIN = 0.3
 ARS_TAU_S = 600.0
 KLINO_SAT_DCDT_PER_MIN = 0.15
@@ -924,8 +934,15 @@ class WormSimulation:
         elif st.behavior == "reversal":
             done = st.state_time > cfg.reversal_min_s and bwd_cmd <= cfg.reversal_threshold
             if done or st.state_time > cfg.reversal_max_s:
-                # Omega turn only if the SMD/RIV pathway is intact.
-                if self.genome.global_scale("omega_turn") > 0.5 and self.rng.random() < 0.75:
+                # Omega turn only if the SMD/RIV pathway is intact, with a
+                # probability set by how far the animal backed up
+                # (Gray 2005 Fig. 2; constants at OMEGA_P_ONE_BEND).
+                bends = st.state_time * 2.0 * self.body.p.freq_hz
+                p_omega = min(OMEGA_P_MAX,
+                              OMEGA_P_ONE_BEND
+                              + OMEGA_P_PER_BEND * max(bends - 1.0, 0.0))
+                if self.genome.global_scale("omega_turn") > 0.5 \
+                        and self.rng.random() < p_omega:
                     st.behavior, st.state_time = "omega", 0.0
                     st.omega_count += 1
                 else:

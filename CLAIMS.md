@@ -63,6 +63,7 @@ what the model knows and what it assumes.
 | Spontaneous reversals at measured rates; food and goa-1 modulate them | measured rates (Gray et al. 2005; Segalat 1995), **scripted** generator: Poisson pulses into the real backward command cells | check "the animal reverses spontaneously" |
 | Chemotaxis by biased random walk, CI in the published band; che-1 abolishes it | measured coupling shape (Pierce-Shimomura et al. 1999), **scripted** stand-in for the ASE-to-command loop (issue #7), gated by real ASE genome gains | check "chemotaxis discriminates salt-blind mutants" |
 | Local search decays to dispersal after leaving food; dopamine required | measured endpoints (Gray et al. 2005), decay constant a labelled GUESS through their time course; cat-2 by mechanism (Hills et al. 2004) | check "leaving food starts local search" |
+| Omega probability rises with reversal length; stimulus strength holds reversals longer | published curve (Gray et al. 2005 Fig. 2, read off the plot); duration held by the real command balance, floor tuned | check "omega turns follow long reversals, not a coin" |
 
 ## Where the honest edges are enforced
 
