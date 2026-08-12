@@ -545,7 +545,19 @@ class WormSimulation:
         dcdt_per_min = self._klino_dcdt
         gate = self.sensory._gain("salt_on")
         m = math.exp(-KLINO_GAIN * dcdt_per_min * gate)
-        per_min *= min(max(m, KLINO_RATE_FLOOR_X), KLINO_RATE_CEIL_X)
+        m = min(max(m, KLINO_RATE_FLOOR_X), KLINO_RATE_CEIL_X)
+        # Descent-evoked pirouettes do not fade with the food memory:
+        # Pierce-Shimomura measured their rates on animals long off food,
+        # and chemotaxis assays run for tens of minutes, which the ARS
+        # decay would otherwise silence (the full suite caught exactly
+        # that). So the boost side is evoked at full local-search scale,
+        # while suppression acts on whatever exploratory baseline the food
+        # memory currently sets. At m = 1 the branches agree.
+        if m > 1.0:
+            per_min += (m - 1.0) * cfg.spont_rev_per_min_off_food \
+                * self.genome.global_scale("spontaneous_reversal")
+        else:
+            per_min *= m
         if self._spont_next_s is None:
             self._spont_next_s = t + float(self.rng.exponential(60.0 / per_min))
             self._spont_rate = per_min
