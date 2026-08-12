@@ -263,7 +263,7 @@ the model knows and what it assumes stays visible.
 
 `worm validate` runs 41 checks against published measurements: 28 behavioural
 (the animal is run and measured) and 12 consistency checks (parameter and data
-invariants). 30 pass. Ten are registered expected failures, each naming the
+invariants). 31 pass. Nine are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium

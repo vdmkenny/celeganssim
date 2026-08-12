@@ -983,16 +983,17 @@ def _swim():
 
 @check("chemotaxis discriminates salt-blind mutants",
        "wild type chemotaxes up a salt gradient; che-1 (no ASE) does not",
-       "Ward 1973; Bargmann & Horvitz 1991; Pierce-Shimomura et al. 1999",
-       xfail="no spontaneous reversals (issue #6) means no pirouettes, so the "
-             "biased random walk cannot exist and wild type scores no better "
-             "than che-1 from a random heading")
+       "Ward 1973; Bargmann & Horvitz 1991; Pierce-Shimomura et al. 1999")
 def _chemo():
     from .assays import run_assay
+    # Six minutes, not two: with runs ending every ~25 s the walk is
+    # diffusive, and over two minutes the band score is set by the seeded
+    # start geometry alone (every genotype scored an identical 0.333).
+    # Real CI assays run tens of minutes for the same reason.
     wt = run_assay("chemotaxis", knockouts=(), seed=0,
-                   minutes=2.0, replicates=3)["result"]
+                   minutes=6.0, replicates=3, workers=3)["result"]
     ko = run_assay("chemotaxis", knockouts=("che-1",), seed=0,
-                   minutes=2.0, replicates=3)["result"]
+                   minutes=6.0, replicates=3, workers=3)["result"]
     # The discrimination must clear both bars: wild type approaches, and the
     # mutant does measurably worse. Thresholds are set just above what pure
     # geometry scores, so passing requires genuine gradient-guided behaviour.

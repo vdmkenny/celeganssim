@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import math
+
 import numpy as np
 
 from .body import Body, BodyParams, N_SEG
@@ -99,6 +101,19 @@ HEAD_PACEMAKER_V = ["RMDVL", "RMDVR", "SMDVL", "SMDVR"]
 SPONT_PULSE_PA = 12.0        # enough to lift AVA/AVE past the calibrated
                              # reversal threshold; scripted stand-in scale
 SPONT_PULSE_S = 1.2          # order of the behavioural bout trigger, well
+# Down/up pirouette-rate ratio ~3 (Pierce-Shimomura 1999, Fig. 6). The gain
+# is derived from a saturation point, not free. The field is in arbitrary
+# units, so the dC/dt at which modulation saturates (GUESS) sits at the
+# lower end of the model's own descent rates (cruise down a sigma-15
+# Gaussian spans roughly 0.1-0.4 units/min): Pierce-Shimomura's Fig. 6
+# saturates at small |dC/dt|, and a higher setting leaves the multiplier
+# in its linear region for most headings (measured 0.55x/1.2x instead of
+# the 3x asymmetry). Floor and ceiling bound the multiplier to the measured 3x.
+KLINO_SAT_DCDT_PER_MIN = 0.15
+KLINO_TAU_S = 4.0
+KLINO_GAIN = math.log(3.0) / KLINO_SAT_DCDT_PER_MIN
+KLINO_RATE_CEIL_X = 3.0
+KLINO_RATE_FLOOR_X = 1.0 / 3.0
                              # under the 14.9 s dissected-prep upstate
 
 
@@ -463,8 +478,43 @@ class WormSimulation:
         per_min *= self.genome.global_scale("spontaneous_reversal")
         if per_min <= 0.0:
             return I
+        # Klinokinesis: the pirouette rate listens to the salt gradient.
+        # Pierce-Shimomura et al. 1999 J Neurosci 19:9557 measured pirouette
+        # initiation roughly 3x higher while heading down-gradient than up
+        # (their Fig. 6), and that asymmetry IS the biased random walk of
+        # chemotaxis. The coupling below is the scripted stand-in for the
+        # ASE-to-command loop (labelled as such; the emergent route needs
+        # issue #7's readout): the generator's rate is multiplied by
+        # exp(gain x (down-drive - up-drive)) using the model's own ASER/ASEL
+        # outputs, so che-1 and tax-4, which zero those drives through the
+        # genome gates, abolish the modulation with no extra wiring. Rate
+        # changes rescale the pending waiting time (inhomogeneous Poisson by
+        # time rescaling), so modulation acts immediately, not one interval
+        # late.
+        c = float(self.env.concentration(self.body.world_nodes()[0], "salt"))
+        if self._klino_c_prev is None:
+            self._klino_c_prev = c
+        inst = (c - self._klino_c_prev) / self.cfg.dt * 60.0
+        self._klino_c_prev = c
+        # Low-passed: the undulating head sweeps across the gradient at gait
+        # frequency, so instantaneous dC/dt oscillates far above saturation
+        # and would slam the multiplier between floor and ceiling every
+        # stroke, averaging the heading signal away. ASE responses integrate
+        # over seconds, and Pierce-Shimomura's dC/dt used multi-second
+        # windows; the filter recovers the translational component.
+        alpha = self.cfg.dt / KLINO_TAU_S
+        self._klino_dcdt += alpha * (inst - self._klino_dcdt)
+        dcdt_per_min = self._klino_dcdt
+        gate = self.sensory._gain("salt_on")
+        m = math.exp(-KLINO_GAIN * dcdt_per_min * gate)
+        per_min *= min(max(m, KLINO_RATE_FLOOR_X), KLINO_RATE_CEIL_X)
         if self._spont_next_s is None:
             self._spont_next_s = t + float(self.rng.exponential(60.0 / per_min))
+            self._spont_rate = per_min
+        elif per_min != self._spont_rate and self._spont_rate > 0.0:
+            self._spont_next_s = t + (self._spont_next_s - t) \
+                * (self._spont_rate / per_min)
+            self._spont_rate = per_min
         if t >= self._spont_next_s:
             self._spont_until_s = t + SPONT_PULSE_S
             self._spont_next_s = t + float(self.rng.exponential(60.0 / per_min))
@@ -551,6 +601,9 @@ class WormSimulation:
         self._pace_gated = (0.0, 0.0, 1.0, 0.0)
         self._spont_next_s = None
         self._spont_until_s = 0.0
+        self._spont_rate = 0.0
+        self._klino_c_prev = None
+        self._klino_dcdt = 0.0
         self.ns.reset()
         self.body.reset(x, y, heading)
         self.state = SimState()
