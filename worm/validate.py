@@ -50,8 +50,19 @@ def _quiet(s: WormSimulation) -> WormSimulation:
 
 
 def gait(knockouts=(), seconds=45.0, seed=0, settle=10.0) -> dict:
-    """Run and measure speed, undulation amplitude and body length."""
-    s = _sim(knockouts, seed=seed)
+    """Run and measure speed, undulation amplitude and body length.
+
+    Spontaneous reversals are held off for the measurement. Cronin's
+    0.20 mm/s is forward crawling, and the net-displacement guard here
+    exists to catch an animal undulating in place, which is a gait
+    failure. A pirouette is not: now that omega turns really do reorient
+    the animal 133 degrees, two of them in a 45 s window drag net
+    displacement down to the guard's threshold and the check turns into a
+    coin flip on the seed. Exploration has its own checks; this one is
+    about the wave. Quieted, a healthy animal nets 0.995 of its path, so
+    the guard keeps all its power against real curling.
+    """
+    s = _quiet(_sim(knockouts, seed=seed))
     n_settle = int(settle / s.cfg.dt)
     n = int(seconds / s.cfg.dt)
     for _ in range(n_settle):
@@ -622,7 +633,24 @@ def _spontaneous():
        "1997 Behav Neurosci 111:342 (sensory-output depression)")
 def _habituation_check():
     from .assays import run_assay
-    r = run_assay("touch-habituation", tap_strength=1.0)["result"]
+    # Both numbers re-derived when tonic adaptation moved the sensory
+    # operating point. Habituation only expresses in a stimulus window:
+    # too weak and the response never clears the noise floor, too strong
+    # and the reflex saturates so depression cannot show. At 1.0 the tap
+    # now evokes 0.0021 against a 0.0015 floor, below the 0.0034 reversal
+    # threshold; at 1.6 it saturates and decrements 2%. 1.25 sits in the
+    # middle of the working window, which spans at least 1.15 to 1.35.
+    #
+    # probe_taps 4, not 2, because the first probes after rest come back
+    # systematically low in every run (0.0010-0.0014 against a settled
+    # 0.0023-0.0031 from the third onward), so a two-sample recovery
+    # estimate is biased low and the check turned on which side of that
+    # bias the draw fell. With four probes recovery agrees across the
+    # whole window, 0.00223 to 0.00230 at strengths 1.15, 1.25 and 1.35,
+    # so it is the estimator that was fragile rather than the biology.
+    # Why those first probes are depressed is not explained; it is not TRN
+    # depression, which has recovered by then.
+    r = run_assay("touch-habituation", tap_strength=1.25, probe_taps=4)["result"]
     ok = (r["decrement"] is not None and r["decrement"] >= 0.20
           and r["recovery_mag"] > r["late_mag"]
           + 0.1 * (r["early_mag"] - r["late_mag"]))
@@ -986,7 +1014,10 @@ def _tdc1():
         s = _sim(kos)
         for _ in range(500):
             s.step()
-        for _ in range(5):
+        # Twelve pokes, not five: omega follows reversal length with
+        # probability about 0.2 per poke, so five pokes expects one omega
+        # and the wild-type arm fails on the draw.
+        for _ in range(12):
             s.env.poke("anterior", 1.0, duration=0.4)
             for _ in range(int(10.0 / s.cfg.dt)):
                 s.step()
@@ -1276,10 +1307,18 @@ def _omega_sharpness():
         a1 = float(_np.degrees(_np.arctan2(*(n[0] - n[-1])[::-1])))
         d = abs(a1 - a0)
         return min(d, 360.0 - d), s.state.omega_count > om0
+    # Sample until enough omega turns have actually happened. Omega
+    # follows reversal length probabilistically (Gray 2005, and the check
+    # above tests that curve), so at p ~ 0.2 per poke a fixed six episodes
+    # returns none about a quarter of the time, and this check would then
+    # fail on nothing but the draw. Magnitude is what is being measured
+    # here, so the sampler waits for magnitudes to measure.
     oms, plains = [], []
-    for sd in range(6):
+    for sd in range(20):
         d, om = episode(sd)
         (oms if om else plains).append(d)
+        if len(oms) >= 3:
+            break
     om_mean = float(np.mean(oms)) if oms else 0.0
     pl_mean = float(np.mean(plains)) if plains else 0.0
     ok = bool(oms) and om_mean >= 90.0 and om_mean > pl_mean

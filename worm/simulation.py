@@ -203,7 +203,17 @@ class SimConfig:
     reversal_max_s: float = 4.0
     omega_s: float = 3.0
     refractory_s: float = 0.6
-    tonic_forward: float = 0.62   # baseline AVB drive -> spontaneous forward
+    # Stands in for baseline AVB output onto the B-class motor neurons. Was
+    # 0.62, re-derived when tonic sensory adaptation landed: the saturated
+    # tonic sensors had been donating excitation to the motor pools, and
+    # removing it dropped the drive sum from the rate formula's saturation
+    # point to 0.71, which pulled undulation to 0.381 Hz against the
+    # commanded 0.47. 0.92 is the least value that puts the sum back at
+    # saturation, and it restores every kinematic quantity at once: 0.468 Hz,
+    # 0.616 BL wavelength, 18.8% BL amplitude against Cronin's 19.3%, and
+    # 0.249 mm/s. It sits right at the knee by construction, so a future
+    # change that lowers network drive will show up as frequency again.
+    tonic_forward: float = 0.92   # baseline AVB drive -> spontaneous forward
     command_gain: float = 9.0
     seed: int = 0
     # Strength of the proprioceptive current, pA per unit normalised curvature.
