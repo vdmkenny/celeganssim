@@ -44,6 +44,34 @@ SENSORS = {
     "food_mech": ["CEPDL", "CEPDR", "CEPVL", "CEPVR", "ADEL", "ADER"],
 }
 
+# Tonic modalities: the ones whose stimulus is PRESENT rather than
+# changing. A flat 55 pA drives these cells to their rail and holds them
+# there, which is not a detector but a switch, and two independent lines of
+# evidence say so. scripts/noise_audit.py found saturated gas sensors
+# transmitting nothing while contributing 98% of the sensory noise floor
+# once unsaturated, and pointed at about 3 pA as the partially-engaged
+# level. Separately, CEP/ADE sit at activation 0.9997 on contact with food,
+# and in a cat-2 background those railed cells drag locomotion speed down
+# 41% through their gap junctions alone, an artefact that ablating the six
+# cells removes entirely and that invalidates cat-2 as the control for the
+# Sawin food-slowing dissociation (issues #11, #12).
+#
+# Held at 1.0, which is a no-op, because the fix was tried and priced.
+# At 0.07 (about 3.85 pA) the sensors do come off the rail, CEP/ADE
+# reaching 0.67 on food instead of 0.9997, and the cat-2 artefact falls
+# from 41% to under 7%. It costs TEN checks: the whole touch panel
+# (anterior, mid-body, mec-10, harsh posterior), tap habituation,
+# spontaneous reversal rate, area-restricted search, the omega turn, and
+# both ablation checks. Restricting the change to tonic modalities was not
+# enough, because oxygen drive is always present and the entire
+# behavioural calibration, the reversal threshold above all, was fitted on
+# top of a network holding that drive. This is the same debt issue #17
+# measured from the biophysics side: the downstream constants encode the
+# upstream error, so the sensory scale and the behavioural calibration
+# have to be re-derived together, not one at a time.
+TONIC_SCALE = 1.0
+TONIC_MODALITIES = ("food_mech", "oxygen_high", "oxygen_low")
+
 # Which gene-level knob gates each modality.
 GATE = {
     "salt_on": ("salt", "chemotaxis"),
@@ -234,6 +262,8 @@ class SensorySystem:
 
         for modality, value in drive.items():
             gain = self._gain(modality)
+            if modality in TONIC_MODALITIES:
+                gain *= TONIC_SCALE
             v = value * gain
             drive[modality] = v
             if v != 0.0 and len(self.idx[modality]):
