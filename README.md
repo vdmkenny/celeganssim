@@ -37,7 +37,7 @@ anything.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 49 checks against published measurements, in parallel
+worm validate         # 51 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -295,7 +295,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 49 checks: 33 behavioural, 16 consistency, gaps as expected failures |
+| `worm/validate.py` | 51 checks: 33 behavioural, 18 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry, provenance tags enforced by a check |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -308,7 +308,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | Genome annotation | NCBI RefSeq GCF_000002985.6 (WBcel235) | 46,926 genes, 19,983 protein-coding |
 | Connectome | Cook et al., corrected July 2020 release, via OpenWorm ConnectomeToolbox | 473 cells, 7,762 edges (302 neurons, 95 body-wall muscles) |
 | Neuron metadata | OpenWorm owmeta | type and transmitter for 302 neurons |
-| Expression | CeNGEN via wormneuroatlas | 128 neuron classes x 13,669 genes |
+| Expression | CeNGEN via wormneuroatlas | 130 genes cached per neuron class: knockout loci, ligand-gated receptors, and 35 ion channels |
 | Cell classification | WormAtlas | lineage and anatomical class |
 | Receptor pharmacology | derived from RefSeq product descriptions | 72 ligand-gated receptors with ion selectivity |
 | Monoamine connectome | Bentley et al. 2016, via OpenWorm ConnectomeToolbox | 2,626 extrasynaptic edges naming ligand and receptor |
@@ -332,9 +332,9 @@ rather than making it, so are not modelled as GABAergic.
 tagged measured, published, tuned or scripted, so the difference between what
 the model knows and what it assumes stays visible.
 
-`worm validate` runs 49 checks against published measurements: 33 behavioural
-(the animal is run and measured) and 16 consistency checks (parameter and data
-invariants). 38 pass. Eleven are registered expected failures, each naming the
+`worm validate` runs 51 checks against published measurements: 33 behavioural
+(the animal is run and measured) and 18 consistency checks (parameter and data
+invariants). 40 pass. Eleven are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium

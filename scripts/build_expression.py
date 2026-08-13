@@ -80,6 +80,39 @@ def expand(cengen_class: str, cell_names: list[str]) -> list[str]:
     return sorted(set(hits))
 
 
+# Voltage-gated and leak channels, cached per neuron class so cell
+# biophysics can be derived from measured expression rather than every
+# neuron sharing one leak conductance and one capacitance. This is issue
+# #28, and it is issue #17 approached from the data side: a network of
+# identical passive cells has no dynamic range to give, and the missing
+# range has to come from cells actually differing.
+#
+# The set is the well-characterised families, named on genetic grounds the
+# way the receptor table is (Salkoff et al. 2005 WormBook, potassium
+# channels; Bargmann 1998 Science 282:2028 for the family census; Liu,
+# Chen & Wang 2018 Cell 175:57 for whole-cell recordings showing neurons
+# differ in exactly these currents).
+ION_CHANNELS = {
+    # Voltage-gated potassium, the main repolarising currents
+    "kv": ["shk-1", "shl-1", "shw-1", "shw-3", "egl-2", "egl-36", "exp-2",
+           "unc-103", "kqt-1", "kqt-3"],
+    # Calcium-activated potassium: BK (slo-1, slo-2) and SK (kcnl-*)
+    "kca": ["slo-1", "slo-2", "kcnl-1", "kcnl-2", "kcnl-3", "kcnl-4"],
+    # Two-pore leak potassium, the TWK family, which sets resting potential
+    # CeNGEN lists these under their canonical names, so the aliases are
+    # used: nca-1 appears as unc-77, and twk-1/unc-110 are absent from the
+    # table entirely.
+    "k_leak": ["twk-3", "twk-14", "twk-20", "twk-40", "twk-44", "unc-58",
+               "sup-9"],
+    # Inward rectifier
+    "kir": ["irk-1", "irk-2", "irk-3"],
+    # Voltage-gated calcium: L-type, P/Q-type, T-type, and the subunits
+    "cav": ["egl-19", "unc-2", "cca-1", "unc-36", "ccb-1"],
+    # NALCN-family sodium leak, which depolarises toward threshold
+    "na_leak": ["unc-77", "nca-2", "unc-80", "nlf-1"],
+}
+
+
 def main() -> int:
     try:
         import wormneuroatlas as wa
@@ -101,12 +134,15 @@ def main() -> int:
     # ligand-gated receptor, so postsynaptic signs can be derived from
     # measured expression rather than assumed per transmitter.
     genes_wanted = set(GENE_EFFECTS)
+    channels = {g for fam in ION_CHANNELS.values() for g in fam}
+    genes_wanted |= channels
     receptors_path = OUT / "receptors.json"
     if receptors_path.exists():
         receptors = json.loads(receptors_path.read_text())["receptors"]
         genes_wanted |= set(receptors)
         print(f"caching {len(genes_wanted)} genes "
-                  f"({len(GENE_EFFECTS)} effect loci + {len(receptors)} receptors)")
+                  f"({len(GENE_EFFECTS)} effect loci + {len(receptors)} "
+                  f"receptors + {len(channels)} ion channels)")
     else:
         print(f"caching {len(genes_wanted)} effect loci "
               "(no receptors.json; run scripts/build_receptors.py)")
@@ -116,6 +152,7 @@ def main() -> int:
     gene_names = [str(g) for g in cg.get_gene_names()]
 
     out: dict[str, dict] = {}
+    channel_families = ION_CHANNELS
     missing: list[str] = []
     for gene in sorted(genes_wanted):
         if gene not in gene_names:
@@ -145,6 +182,7 @@ def main() -> int:
                   "wormneuroatlas (Randi et al. 2023 Nature 623:406)",
         "threshold": 4,
         "genes": out,
+        "channel_families": channel_families,
         "not_in_cengen": missing,
     }
     (OUT / "expression.json").write_text(json.dumps(payload, indent=1))

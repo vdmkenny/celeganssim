@@ -939,6 +939,45 @@ def _peptide_layer():
                 f"default, see MonoamineLayer")
 
 
+@check("measured channel expression differentiates the cells",
+       "neurons are not interchangeable passive spheres: the ion channels "
+       "they express differ cell by cell, and CeNGEN measures it. The "
+       "cached complement must cover the main families, span a real range "
+       "per cell, and actually differ between cells, or there is nothing "
+       "for per-cell biophysics to be derived from",
+       "Taylor et al. 2021 Cell 184:4329 (CeNGEN) via Randi et al. 2023 "
+       "Nature 623:406; Salkoff et al. 2005 WormBook (potassium channel "
+       "families); Liu, Chen & Wang 2018 Cell 175:57 (neurons differ in "
+       "these currents under whole-cell recording)",
+       section="consistency")
+def _channel_expression():
+    import json
+    from .paths import data_dir
+    e = json.loads((data_dir() / "expression.json").read_text())
+    fams = e.get("channel_families", {})
+    genes = e["genes"]
+    cached = [g for f in fams.values() for g in f if g in genes]
+    per_cell = {}
+    for g in cached:
+        for c in genes[g]["cells"]:
+            per_cell.setdefault(c, set()).add(g)
+    counts = sorted(len(v) for v in per_cell.values())
+    # Do complements actually differ? Compare the two extremes rather than
+    # sampling, so the number is deterministic.
+    sets = list(per_cell.values())
+    lo = min(sets, key=len)
+    hi = max(sets, key=len)
+    overlap = len(lo & hi) / max(len(lo | hi), 1)
+    ok = (len(fams) >= 5 and len(cached) >= 25 and len(per_cell) >= 250
+          and counts[0] >= 1 and counts[-1] >= 3 * max(counts[0], 1)
+          and overlap < 0.6)
+    return ok, (f"{len(cached)} channel genes in {len(fams)} families across "
+                f"{len(per_cell)} cells; per cell min {counts[0]}, median "
+                f"{counts[len(counts)//2]}, max {counts[-1]}; the sparsest "
+                f"and richest cells share {overlap:.0%} of their channels, "
+                f"so the data does distinguish them")
+
+
 @check("the monoamine layer is extrasynaptic and pharmacologically signed",
        "monoamines act by volume transmission, so their edges are ligand "
        "and receptor pairs rather than wiring: every edge must name a "
