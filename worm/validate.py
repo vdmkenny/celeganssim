@@ -1323,18 +1323,22 @@ def _ars():
        "while tph-1 (no serotonin) leaves it intact, since the serotonergic "
        "enhanced response only appears in food-deprived animals",
        "Sawin, Ranganathan & Horvitz 2000 Neuron 26:619",
-       xfail="the dissociation does not hold: cat-2 slows as much as the "
-             "wild type or more (26.3% against 20.1% here, 18.7% against "
-             "20.3% on a longer protocol) where it should not slow at all. "
-             "The scalar food_slowing() correctly returns 1.0 for cat-2, so "
-             "that slowing is entirely the NETWORK, and the "
-             "network has the food-to-speed pathway backwards: with the "
-             "formula disabled the wild type SPEEDS UP 5% on food while "
-             "cat-2 slows. Dopamine polarity is not the bug (it is -0.2, "
-             "inhibitory); removing dopaminergic transmission changes the "
-             "resting network enough to invert the food response. Nothing "
-             "tested this before, so an assay number stood in for the "
-             "dissociation it was named after (issue #11)")
+       xfail="two separate problems, both localised by ablation. The wild "
+             "type network produces NO slowing on its own (-1.0%), so the "
+             "scalar food_slowing() is the entire measured phenotype, which "
+             "is this issue's premise. Worse, cat-2 slows 26-41% where it "
+             "should not slow at all, and that is an ARTEFACT: killing the "
+             "six dopaminergic sensors CEP/ADE removes it completely "
+             "(-41.1% becomes +0.0%), and they are pinned at their rail on "
+             "food, activation 0.9997, which is the sensory saturation "
+             "issue #12 documents. With dopaminergic transmission zeroed by "
+             "cat-2 those saturated cells reach the network only "
+             "electrically, and that drags locomotion. Head steering is not "
+             "the route (dorsoventral asymmetry is unchanged). So issue #11 "
+             "is blocked on #12: the mutant control cannot be trusted while "
+             "a sensory neuron saturates on contact with food")
+
+
 def _sawin():
     from .assays import run_assay
 
