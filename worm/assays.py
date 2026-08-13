@@ -48,12 +48,25 @@ def _torus_dist(a: np.ndarray, b: np.ndarray, width: float, height: float) -> fl
 # Here the near band is under 3%, and a six-minute run covers about 90 mm of
 # path against a 75 mm half-width, so wrapping is occasional rather than the
 # dominant behaviour it was on the small plate.
+#
+# The geometry is Ward's, not ours. Concentric bands around a single peak
+# were an invention, and they interacted badly with everything: the near
+# band's share of the arena set a blind animal's score (which is how a
+# chemotaxis pass survived on the old small plate), and the start ring sat
+# OUTSIDE the far band, so every animal began already scored as avoiding.
+# The real assay puts an attractant spot and a control spot at opposite
+# ends, releases the animals in the middle, and counts how many are at each
+# spot at scoring time. Both regions are the same size and equally far, so
+# an animal with no chemosensation scores zero by construction rather than
+# by the arena happening to be the right size.
 CHEMO_ARENA = (150.0, 110.0)
-CHEMO_SOURCE_XY = (75.0, 55.0)      # peak central, starts ring around it
-CHEMO_SOURCE_SIGMA_MM = 25.0        # Gaussian spread of the salt source
-CHEMO_START_RING_MM = 35.0          # animals start on a ring this far from the peak
-CHEMO_NEAR_BAND_MM = 12.0           # inside this counts as "at the peak"
-CHEMO_FAR_BAND_MM = 30.0            # beyond this counts as "avoiding the peak"
+CHEMO_SPOT_DX_MM = 25.0             # attractant at +dx, control at -dx
+CHEMO_SOURCE_XY = (75.0 + 25.0, 55.0)
+CHEMO_CONTROL_XY = (75.0 - 25.0, 55.0)
+CHEMO_SOURCE_SIGMA_MM = 20.0        # Gaussian spread of the salt source
+CHEMO_START_XY = (75.0, 55.0)       # released midway between the spots
+CHEMO_START_JITTER_MM = 3.0         # a released drop is not a point
+CHEMO_SCORE_RADIUS_MM = 12.0        # counted as "at" a spot inside this
 CHEMO_RUN_MINUTES = 5.0             # per replicate
 CHEMO_REPLICATES = 6                # randomized starts/headings per condition
 
@@ -62,9 +75,9 @@ CONST_PROVENANCE = {
     "CHEMO_ARENA": "assay",
     "CHEMO_SOURCE_XY": "assay",
     "CHEMO_SOURCE_SIGMA_MM": "assay",
-    "CHEMO_START_RING_MM": "assay",
-    "CHEMO_NEAR_BAND_MM": "assay",
-    "CHEMO_FAR_BAND_MM": "assay",
+    "CHEMO_START_JITTER_MM": "assay",
+    "CHEMO_SCORE_RADIUS_MM": "assay",
+    "CHEMO_SPOT_DX_MM": "assay",
     "CHEMO_RUN_MINUTES": "assay",
     "CHEMO_REPLICATES": "assay",
 }
@@ -109,6 +122,7 @@ def _chemo_run(task):
     sim = _build(knockouts, ablations, seed,
                  width=CHEMO_ARENA[0], height=CHEMO_ARENA[1])
     peak = np.array(CHEMO_SOURCE_XY)
+    ctrl = np.array(CHEMO_CONTROL_XY)
     sim.env.add_source(peak[0], peak[1], kind="salt", strength=1.0,
                        sigma=CHEMO_SOURCE_SIGMA_MM)
     sim.reset(x=float(start_xy[0]), y=float(start_xy[1]), heading=heading)
@@ -119,17 +133,20 @@ def _chemo_run(task):
     for _ in range(steps):
         sim.step()
         d = _torus_dist(sim.body.X, peak, sim.env.width, sim.env.height)
-        if d < CHEMO_NEAR_BAND_MM:
+        dc = _torus_dist(sim.body.X, ctrl, sim.env.width, sim.env.height)
+        # Dwell time at each spot, the finer-grained per-animal readout.
+        if d < CHEMO_SCORE_RADIUS_MM:
             near += 1
-        elif d > CHEMO_FAR_BAND_MM:
+        elif dc < CHEMO_SCORE_RADIUS_MM:
             far += 1
     d1 = _torus_dist(sim.body.X, peak, sim.env.width, sim.env.height)
+    dc1 = _torus_dist(sim.body.X, ctrl, sim.env.width, sim.env.height)
     ci = (near - far) / max(near + far, 1)
     # Where this animal ENDS is what a plate assay actually scores: the
     # index counts animals in a region at scoring time, not the time one
     # animal spent there. Both are returned; see the assay docstring.
-    where = ("near" if d1 < CHEMO_NEAR_BAND_MM
-             else "far" if d1 > CHEMO_FAR_BAND_MM else "middle")
+    where = ("near" if d1 < CHEMO_SCORE_RADIUS_MM
+             else "far" if dc1 < CHEMO_SCORE_RADIUS_MM else "middle")
     return {"ci": round(ci, 3), "reversals": sim.state.reversal_count,
             "approached_mm": round(d0 - d1, 2), "scored": where,
             "start_deg": round(float(np.degrees(theta)), 1)}
@@ -170,12 +187,13 @@ def _chemotaxis(knockouts=(), ablations=(), seed=0, minutes=CHEMO_RUN_MINUTES,
     mutant -- the assay must be able to fail, or it measures nothing.
     Distances are torus-aware because the arena wraps.
     """
-    peak = np.array(CHEMO_SOURCE_XY)
     tasks = []
     for r in range(replicates):
         rng = np.random.default_rng(1000 + seed * 100 + r)
         theta = rng.uniform(0.0, 2.0 * np.pi)
-        start = peak + CHEMO_START_RING_MM * np.array([np.cos(theta), np.sin(theta)])
+        jitter = rng.uniform(0.0, CHEMO_START_JITTER_MM)
+        start = (np.array(CHEMO_START_XY)
+                 + jitter * np.array([np.cos(theta), np.sin(theta)]))
         heading = rng.uniform(0.0, 2.0 * np.pi)
         tasks.append((tuple(knockouts), tuple(ablations), seed + r, minutes,
                       tuple(start), heading, theta))
