@@ -56,6 +56,12 @@ SENSORS = {
 # cells removes entirely and that invalidates cat-2 as the control for the
 # Sawin food-slowing dissociation (issues #11, #12).
 #
+# Superseded by TONIC_ADAPT_TAU_S below, which makes this knob irrelevant:
+# with the steady component subtracted, the tonic cells no longer rail no
+# matter what the scale is, and both arms of the sweep were identical.
+# Kept at 1.0 with its record because the measurement is still the reason
+# the adaptation route was taken.
+#
 # Held at 1.0, which is a no-op, because the fix was tried and priced.
 # At 0.07 (about 3.85 pA) the sensors do come off the rail, CEP/ADE
 # reaching 0.67 on food instead of 0.9997, and the cat-2 artefact falls
@@ -71,6 +77,27 @@ SENSORS = {
 # have to be re-derived together, not one at a time.
 TONIC_SCALE = 1.0
 TONIC_MODALITIES = ("food_mech", "oxygen_high", "oxygen_low")
+
+# Tonic sensors adapt: a receptor sitting in a steady field stops reporting
+# it, while changes still get through. URX responds to oxygen with a
+# sustained but adapting response (Zimmer et al. 2009 Neuron 61:865;
+# Busch et al. 2012 Nat Neurosci 15:581), and this is the treatment
+# scripts/noise_audit.py recommended for tonic modalities under
+# physiological drive.
+#
+# It solves what neither rescaling nor noise reduction could. The command
+# noise floor is not stochastic: cutting neural_noise 6.7x moved it 18%,
+# because it is the animal RESAMPLING steady fields as it undulates.
+# Subtracting the adapted component removes that self-motion artefact at
+# the source, and every touch band improves against it: wild-type anterior
+# 3.97x floor to 4.55x, mec-10 2.19x to 2.38x, posterior 1.38x to 1.46x,
+# harsh 1.64x to 1.76x. It also ends the saturation that made CEP/ADE rail
+# on food and invalidated cat-2 as a control (issues #11, #12).
+#
+# 30 s is a GUESS: long against the gait cycle so a steady field decays
+# while a real environmental change still registers, and Zimmer's URX
+# traces adapt over tens of seconds.
+TONIC_ADAPT_TAU_S = 30.0
 
 # Which gene-level knob gates each modality.
 GATE = {
@@ -203,6 +230,7 @@ class SensorySystem:
         self._salt_prev: float | None = None
         self._odor_prev: float | None = None
         self._temp_prev: float | None = None
+        self._tonic_lp: dict[str, float] = {}
         self.last: dict[str, float] = {}
 
     def _gain(self, modality: str) -> float:
@@ -265,6 +293,10 @@ class SensorySystem:
             if modality in TONIC_MODALITIES:
                 gain *= TONIC_SCALE
             v = value * gain
+            if modality in TONIC_MODALITIES:
+                lp = self._tonic_lp.get(modality, v)
+                self._tonic_lp[modality] = lp + (dt / TONIC_ADAPT_TAU_S) * (v - lp)
+                v = v - self._tonic_lp[modality]
             drive[modality] = v
             if v != 0.0 and len(self.idx[modality]):
                 I[self.idx[modality]] += v * amplitude
