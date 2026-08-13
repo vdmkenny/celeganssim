@@ -246,6 +246,8 @@ class NeuralParams:
     # re-deriving the reversal threshold, the junction strength and the gait
     # constants together, not moving this number.
     v_th_offset_mv = 0.0
+    # Wicks et al. 1996 J Neurosci 16:4017, rescaled 1.5x as in Kunert
+    # et al. 2014 PLoS Comput Biol 10:e1003472.
     a_r = (1.0 / 1.5) / 1000.0   # synaptic rise rate, 1/ms  (0.667 s^-1)
     a_d = (5.0 / 1.5) / 1000.0   # synaptic decay rate, 1/ms (3.33 s^-1)
 

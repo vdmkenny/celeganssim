@@ -1317,6 +1317,39 @@ def _ars():
                 f"(elevation needs dopamine)")
 
 
+@check("food slowing dissociates by transmitter, as Sawin measured",
+       "a well-fed animal slows on contacting bacteria, and the response is "
+       "genetically separable: cat-2 (no dopamine) abolishes BASAL slowing "
+       "while tph-1 (no serotonin) leaves it intact, since the serotonergic "
+       "enhanced response only appears in food-deprived animals",
+       "Sawin, Ranganathan & Horvitz 2000 Neuron 26:619",
+       xfail="the dissociation does not hold: cat-2 slows as much as the "
+             "wild type or more (26.3% against 20.1% here, 18.7% against "
+             "20.3% on a longer protocol) where it should not slow at all. "
+             "The scalar food_slowing() correctly returns 1.0 for cat-2, so "
+             "that slowing is entirely the NETWORK, and the "
+             "network has the food-to-speed pathway backwards: with the "
+             "formula disabled the wild type SPEEDS UP 5% on food while "
+             "cat-2 slows. Dopamine polarity is not the bug (it is -0.2, "
+             "inhibitory); removing dopaminergic transmission changes the "
+             "resting network enough to invert the food response. Nothing "
+             "tested this before, so an assay number stood in for the "
+             "dissociation it was named after (issue #11)")
+def _sawin():
+    from .assays import run_assay
+
+    def slowing(kos):
+        return run_assay("basal-slowing", knockouts=kos, seed=0,
+                         minutes=1.0)["result"]["slowing_fraction"]
+    wt = slowing(())
+    cat2 = slowing(("cat-2",))
+    tph1 = slowing(("tph-1",))
+    ok = (0.08 <= wt <= 0.30 and cat2 <= 0.05 and tph1 >= 0.08)
+    return ok, (f"wild type slows {wt:.1%} on food, cat-2 {cat2:.1%} "
+                f"(should be about zero: dopamine carries basal slowing), "
+                f"tph-1 {tph1:.1%} (should keep it)")
+
+
 @check("daf-2 longevity requires daf-16",
        "daf-2 loss roughly doubles lifespan, and removing daf-16 as well "
        "abolishes the extension completely; eat-2 does not need daf-16",
@@ -1367,7 +1400,7 @@ def main(verbose: bool = True, jobs: int = 1, match: str | None = None) -> int:
         # seconds of simulated behaviour per check; anything unlisted is
         # cheap. Update alongside the checks; the printed [Ns] timings are
         # the measurement.
-        est = {"spontaneously": 600, "local search": 1500, "omega": 300, "vigor": 90, "chemotaxis": 2400, "sharpness": 180, "habituates": 340, "probability": 340,
+        est = {"spontaneously": 600, "local search": 1500, "Sawin": 400, "omega": 300, "vigor": 90, "chemotaxis": 2400, "sharpness": 180, "habituates": 340, "probability": 340,
                "tyramine": 130, "gentle touch": 90, "mec-10": 80,
                "ablation": 80, "swims": 60, "crawls": 60, "unc-": 60,
                "vab-7": 60, "circles": 60, "forward": 60, "muscles": 70,
