@@ -409,7 +409,10 @@ class Connectome:
                 "layers": ["sensory", "interneuron", "motor", "muscle"]}
 
     def edge_list(self, min_weight: float = 3.0) -> list:
-        """Edges worth drawing, as [pre_index, post_index, weight, is_gap].
+        """Edges worth drawing, as [pre, post, weight, is_gap, sign].
+
+        sign is +1 excitatory, -1 inhibitory, 0 for gap junctions, which
+        are ohmic and have no sign.
 
         Thresholded because the full 7,379-edge graph redrawn every frame is
         both slow and unreadable; the weak tail carries little signal.
@@ -420,14 +423,21 @@ class Connectome:
             for j in range(n):
                 w = self.Gs[j, i]
                 if w >= min_weight:
-                    out.append([i, j, round(float(w), 1), 0])
+                    # Sign travels with the edge so the viewer can draw it.
+                    # It is derived per edge from the POSTSYNAPTIC cell's
+                    # receptor expression, which is the whole reason it is
+                    # worth seeing: the same transmitter takes opposite
+                    # signs on different targets, and that is invisible in
+                    # a monochrome graph.
+                    sign = -1 if float(self.E_syn[j, i]) < -10.0 else 1
+                    out.append([i, j, round(float(w), 1), 0, sign])
         seen = set()
         for i in range(n):
             for j in range(n):
                 w = self.Gg[j, i]
                 if w >= min_weight and (j, i) not in seen:
                     seen.add((i, j))
-                    out.append([i, j, round(float(w), 1), 1])
+                    out.append([i, j, round(float(w), 1), 1, 0])
         return out
 
     def stats(self) -> dict:

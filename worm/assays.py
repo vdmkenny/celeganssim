@@ -125,8 +125,13 @@ def _chemo_run(task):
             far += 1
     d1 = _torus_dist(sim.body.X, peak, sim.env.width, sim.env.height)
     ci = (near - far) / max(near + far, 1)
+    # Where this animal ENDS is what a plate assay actually scores: the
+    # index counts animals in a region at scoring time, not the time one
+    # animal spent there. Both are returned; see the assay docstring.
+    where = ("near" if d1 < CHEMO_NEAR_BAND_MM
+             else "far" if d1 > CHEMO_FAR_BAND_MM else "middle")
     return {"ci": round(ci, 3), "reversals": sim.state.reversal_count,
-            "approached_mm": round(d0 - d1, 2),
+            "approached_mm": round(d0 - d1, 2), "scored": where,
             "start_deg": round(float(np.degrees(theta)), 1)}
 
 
@@ -140,11 +145,24 @@ def _chemo_run(task):
                    "spends its time relative to the peak.")
 def _chemotaxis(knockouts=(), ablations=(), seed=0, minutes=CHEMO_RUN_MINUTES,
                 replicates=CHEMO_REPLICATES, workers=1) -> dict:
-    """Classic population assay run on one animal over time, replicated.
+    """The plate assay, scored the way plates are scored.
 
-    The chemotaxis index is normally counts of animals in a scoring region;
-    with one animal the time-equivalent is the fraction of the run spent in
-    the near band versus the far band of the gradient.
+    Ward's index is (N_near - N_far) / N_total over the ANIMALS on a plate
+    at scoring time. Running one animal and taking the fraction of its run
+    spent near the peak is a different statistic that happens to share the
+    name, and it is not robust: a blind animal's dwell fraction depends on
+    how much of the arena the scoring band covers, which is how an earlier
+    version of this assay reported a strong index for a salt-blind mutant.
+
+    So both are reported. `chemotaxis_index` counts where the replicates
+    END, which is the population statistic and the one to quote.
+    `dwell_index` is the per-animal time fraction, kept because it is a
+    finer-grained readout of a single animal's behaviour and because the
+    old number should stay comparable.
+
+    Replicates are independent animals: no interaction is modelled, so this
+    is a plate of animals that ignore each other. Aggregation and social
+    feeding need real interaction (issue #24).
 
     Each replicate starts on a ring around the peak at a random angle with a
     random heading. An earlier version started the animal pointing directly
@@ -170,8 +188,21 @@ def _chemotaxis(knockouts=(), ablations=(), seed=0, minutes=CHEMO_RUN_MINUTES,
     cis = [r["ci"] for r in runs]
     revs = [r["reversals"] for r in runs]
     approaches = [r["approached_mm"] for r in runs]
-    return {"chemotaxis_index": round(float(np.mean(cis)), 3),
-            "chemotaxis_index_sd": round(float(np.std(cis)), 3),
+    n_near = sum(1 for r in runs if r["scored"] == "near")
+    n_far = sum(1 for r in runs if r["scored"] == "far")
+    pop_ci = (n_near - n_far) / max(n_near + n_far, 1)
+    # Binomial standard error on the population index, so a reader can see
+    # when N is too small for the number to mean anything.
+    n_scored = n_near + n_far
+    pop_se = (2.0 * np.sqrt(max(n_near * n_far, 1)) / n_scored ** 1.5
+              if n_scored else float("nan"))
+    return {"chemotaxis_index": round(float(pop_ci), 3),
+            "chemotaxis_index_se": round(float(pop_se), 3),
+            "n_near": n_near, "n_far": n_far,
+            "n_middle": len(runs) - n_scored,
+            "dwell_index": round(float(np.mean(cis)), 3),
+            "dwell_index_sd": round(float(np.std(cis)), 3),
+            "animals": replicates,
             "replicates": replicates,
             "per_run": runs,
             "reversals_mean": round(float(np.mean(revs)), 2),

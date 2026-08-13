@@ -26,10 +26,13 @@ body.network #hud{display:none}
     border-radius:7px;padding:3px;z-index:3}
   #tabs button{border:none;background:transparent;padding:5px 14px;border-radius:5px}
   #tabs button.on{background:var(--accent);color:#07100f}
-  #netlegend{display:none;position:absolute;left:12px;bottom:12px;
+  #netlegend{pointer-events:none;display:none;position:absolute;left:12px;bottom:12px;
     background:rgba(8,11,17,.86);border:1px solid var(--line);border-radius:6px;
     padding:8px 11px;font-size:11px;color:var(--dim);line-height:1.7}
-  #netinfo{display:none;position:absolute;right:12px;top:56px;min-width:170px;
+  .lgrow{display:flex;align-items:center;gap:3px;white-space:nowrap}
+  .lgk{display:inline-block;width:38px;color:var(--dim);opacity:.75}
+  .lgn{margin-left:10px;color:var(--dim);opacity:.6}
+  #netinfo{pointer-events:none;display:none;position:absolute;right:12px;top:56px;min-width:170px;
     background:rgba(8,11,17,.9);border:1px solid var(--line);border-radius:6px;
     padding:8px 11px;font-size:11.5px}
   #mini{position:absolute;left:12px;bottom:12px;border:1px solid var(--line);
@@ -37,6 +40,12 @@ body.network #hud{display:none}
   #hud{position:absolute;left:12px;top:12px;background:rgba(8,11,17,.82);
     border:1px solid var(--line);border-radius:6px;padding:9px 12px;min-width:210px}
   #hud .b{font-size:17px;font-weight:600;letter-spacing:.5px}
+  #zoombox{display:none;position:absolute;right:12px;bottom:12px;gap:4px;
+    align-items:center;background:rgba(8,11,17,.86);border:1px solid var(--line);
+    border-radius:6px;padding:4px 6px;font-size:11px;color:var(--dim)}
+  #zoombox button{padding:1px 7px;font-size:11px}
+  #zoomlabel{min-width:46px;text-align:center;font-variant-numeric:tabular-nums}
+  body:not(.network) #zoombox{display:flex}
   #hint{position:absolute;right:12px;top:12px;color:var(--dim);font-size:11px;
     background:rgba(8,11,17,.82);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
   #side{width:340px;flex:none;background:var(--panel);border-left:1px solid var(--line);
@@ -90,10 +99,15 @@ body.network #hud{display:none}
     </div>
     <div id="netlegend">
       <div><b>sensory</b> &rarr; <b>interneuron</b> &rarr; <b>motor</b> &rarr; <b>muscle</b></div>
-      <div>node brightness = live activation &middot; hover a node to name it</div>
-      <div><i class="sw" style="background:#5ad1c4"></i>above rest
-          <i class="sw" style="background:#e2565f;margin-left:8px"></i>below rest
-          <i class="sw" style="background:#6b7a92;margin-left:8px"></i>gap junction</div>
+      <div class="lgrow"><span class="lgk">cells</span>
+          <i class="sw" style="background:#5ad1c4"></i>above rest
+          <i class="sw" style="background:#e2565f;margin-left:9px"></i>below rest
+          <span class="lgn">brightness = live activation</span></div>
+      <div class="lgrow"><span class="lgk">links</span>
+          <i class="sw" style="background:#5ad1c4"></i>excitatory
+          <i class="sw" style="background:#e28256;margin-left:9px"></i>inhibitory
+          <i class="sw" style="background:#6b7a92;margin-left:9px"></i>gap
+          <span class="lgn">sign from receptor expression</span></div>
     </div>
     <div id="netinfo"></div>
     <canvas id="mini" width="220" height="160"></canvas>
@@ -106,6 +120,12 @@ body.network #hud{display:none}
       <div class="kv"><span>body length</span><span id="len">100%</span></div>
     </div>
     <div id="hint">click arena to drop attractant &middot; shift-click for repellent</div>
+    <div id="zoombox">
+      <button onclick="setZoom(VIEW_MM*1.6)" title="zoom out">&minus;</button>
+      <span id="zoomlabel">3.4 mm</span>
+      <button onclick="setZoom(VIEW_MM/1.6)" title="zoom in">+</button>
+      <button onclick="setZoom(1e9)" title="fit the whole arena">arena</button>
+    </div>
   </div>
 
   <div id="side">
@@ -219,6 +239,11 @@ body.network #hud{display:none}
 const $ = id => document.getElementById(id);
 const _lastHTML = new Map(), _lastText = new Map();
 function setHTML(id, html){
+  // Everything writing these panels must come through here. Writing
+  // innerHTML directly leaves the cache believing the old value is still on
+  // screen, and the next setHTML with that value is skipped as a no-op: the
+  // network tooltip used to stick on the last hovered cell for exactly that
+  // reason, which also made the nodes behind the panel unreachable.
   if (_lastHTML.get(id) === html) return;
   _lastHTML.set(id, html); $(id).innerHTML = html;
 }
@@ -291,10 +316,34 @@ function setTool(t){
   $('hint').textContent = 'tool: ' + TOOLS[t].label + '  ·  click in the arena';
 }
 
+main.addEventListener('wheel', ev => {
+  ev.preventDefault();
+  setZoom(VIEW_MM * (ev.deltaY > 0 ? 1.12 : 1/1.12));
+}, {passive:false});
+
 main.addEventListener('click', ev => {
   if(!frame) return;
   const r = main.getBoundingClientRect();
-  const p = screenToWorld(ev.clientX-r.left, ev.clientY-r.top, r);
+  applyTool(screenToWorld(ev.clientX-r.left, ev.clientY-r.top, r));
+});
+
+// Same tools, from the minimap. Poking needs the body, which is a speck at
+// arena scale, so the minimap places chemicals and leaves poking to the
+// main view rather than pretending a 2-pixel target is clickable.
+mini.addEventListener('click', ev => {
+  if(!frame) return;
+  const r = mini.getBoundingClientRect(), e = frame.env;
+  const s = Math.min(mini.width/e.width, mini.height/e.height);
+  const mx = (ev.clientX - r.left) * (mini.width / r.width);
+  const my = (ev.clientY - r.top) * (mini.height / r.height);
+  applyTool([(mx - mini.width/2)/s, (my - mini.height/2)/s], true);
+});
+
+function applyTool(p, fromMini){
+  if(fromMini && (tool === 'poke' || tool === 'harsh')){
+    $('hint').textContent = 'poking needs the body: click the animal in the arena view';
+    return;
+  }
   if(tool === 'poke' || tool === 'harsh'){
     cmd({cmd:'poke_at', x:p[0], y:p[1],
          strength: tool==='harsh' ? 2.2 : 1.0, harsh: tool==='harsh'})
@@ -309,7 +358,7 @@ main.addEventListener('click', ev => {
     cmd({cmd:'add_source', x:p[0], y:p[1], kind:'salt', strength:1.0, sigma:6.0});
     cmd({cmd:'add_source', x:p[0], y:p[1], kind:'food', strength:1.0, sigma:3.0});
   }
-});
+}
 
 // Brief marker where a poke landed, so a hit is distinguishable from a miss.
 let flashes = [];
@@ -327,7 +376,15 @@ function drawFlashes(ctx, s, cx, cy){
 }
 
 // ---- camera ---------------------------------------------------------
-const VIEW_MM = 3.4;            // width of the main view in mm (worm is 1 mm)
+// Width of the main view in mm. The worm is about 1 mm, so 3.4 frames the
+// animal; zooming out to the arena width shows where it has actually been.
+const VIEW_MM_MIN = 1.2, VIEW_MM_MAX = 70;
+let VIEW_MM = 3.4;
+function setZoom(mm){
+  VIEW_MM = Math.max(VIEW_MM_MIN, Math.min(VIEW_MM_MAX, mm));
+  const z = $('zoomlabel');
+  if (z) z.textContent = VIEW_MM.toFixed(1) + ' mm';
+}
 let cam = [0,0];
 function scaleFor(r){ return r.width / VIEW_MM; }
 function screenToWorld(sx, sy, r){
@@ -448,11 +505,17 @@ function render(){
   strokeTrail(mctx, f.trail, f.env, p => [(p[0]-cam[0])*s+cx, (p[1]-cam[1])*s+cy]);
   drawWorm(mctx,nodes,f.radius,f.dorsal,f.ventral,s,cx,cy);
 
-  // scale bar: 1 mm
+  // Scale bar. Cleared to the right of the minimap, which is an HTML
+  // overlay pinned bottom-left and used to sit straight on top of it.
+  // At a zoomed-out view a 1 mm bar shrinks to nothing, so the bar picks a
+  // round number of millimetres that stays a readable width on screen.
+  const barX = (mini.getBoundingClientRect().width + 26) * dpr;
+  const mmChoices = [0.5, 1, 2, 5, 10, 20, 50];
+  const barMM = mmChoices.find(v => v * s > 60 * dpr) || mmChoices[mmChoices.length-1];
   mctx.strokeStyle='rgba(230,237,247,.55)'; mctx.lineWidth=2*dpr;
-  mctx.beginPath(); mctx.moveTo(20*dpr,h-24*dpr); mctx.lineTo(20*dpr+s,h-24*dpr); mctx.stroke();
+  mctx.beginPath(); mctx.moveTo(barX,h-24*dpr); mctx.lineTo(barX+barMM*s,h-24*dpr); mctx.stroke();
   mctx.fillStyle='rgba(230,237,247,.65)'; mctx.font=`${11*dpr}px ui-monospace,monospace`;
-  mctx.fillText('1 mm', 20*dpr, h-30*dpr);
+  mctx.fillText(`${barMM} mm`, barX, h-30*dpr);
 
   drawFlashes(mctx, s, cx, cy);
 
@@ -524,12 +587,12 @@ function loadGraph(){
     // Adjacency in layout-index space, for hover highlighting.
     graph.adj = g.nodes.map(() => new Set());
     graph.links = g.nodes.map(() => []);
-    for (const [i, j, wt, gap] of g.edges) {
+    for (const [i, j, wt, gap, sign] of g.edges) {
       const a = graph.byIndex[i], b = graph.byIndex[j];
       if (!a || !b) continue;
       graph.adj[a.li].add(b.li); graph.adj[b.li].add(a.li);
-      graph.links[a.li].push({to: b, w: wt, gap: gap, out: true});
-      graph.links[b.li].push({to: a, w: wt, gap: gap, out: false});
+      graph.links[a.li].push({to: b, w: wt, gap: gap, sign: sign, out: true});
+      graph.links[b.li].push({to: a, w: wt, gap: gap, sign: sign, out: false});
     }
     netDefaultInfo();
   }).catch(() => { $('netinfo').textContent = 'could not load network'; });
@@ -545,6 +608,17 @@ function netLayout(w, h){
 // never changes, only brightness does, and stroking 3257 beziers individually
 // every frame is what made this slow. Per frame we now redraw only the edges
 // actually carrying signal, batched into a handful of paths.
+// Edge colour carries synaptic SIGN, which this model derives per edge from
+// the postsynaptic cell's receptor expression rather than from the
+// transmitter. That is the point of showing it: the same transmitter takes
+// opposite signs on different targets, so the excitatory and inhibitory
+// structure of the graph is a result here, not an input, and a whole class
+// coming out the wrong polarity is visible at a glance.
+// 0 excitatory, 1 inhibitory, 2 gap junction (ohmic, no sign).
+const EDGE_CLASSES = 3;
+const EDGE_RGB = ['90,209,196', '226,130,86', '107,122,146'];
+const edgeClass = (gap, sign) => gap ? 2 : (sign < 0 ? 1 : 0);
+
 let baseLayer = null, baseKey = '';
 let lastDrawKey = '';
 
@@ -555,11 +629,11 @@ function buildBaseLayer(w, h, P, deadEdge){
   baseLayer = document.createElement('canvas');
   baseLayer.width = w; baseLayer.height = h;
   const b = baseLayer.getContext('2d');
-  // Two batched paths: one for chemical synapses, one for gap junctions.
-  for (const gapPass of [0, 1]) {
+  // One batched path per edge class: excitatory, inhibitory, gap.
+  for (let cls = 0; cls < EDGE_CLASSES; cls++) {
     b.beginPath();
-    for (const [i, j, wt, gap] of graph.edges) {
-      if (gap !== gapPass) continue;
+    for (const [i, j, wt, gap, sign] of graph.edges) {
+      if (edgeClass(gap, sign) !== cls) continue;
       const a = graph.byIndex[i], c = graph.byIndex[j];
       if (!a || !c) continue;
       if (deadEdge.has(a.n) || deadEdge.has(c.n)) continue;
@@ -568,7 +642,7 @@ function buildBaseLayer(w, h, P, deadEdge){
       b.moveTo(pa[0], pa[1]);
       b.bezierCurveTo(mx, pa[1], mx, pc[1], pc[0], pc[1]);
     }
-    b.strokeStyle = gapPass ? 'rgba(107,122,146,.055)' : 'rgba(90,209,196,.05)';
+    b.strokeStyle = `rgba(${EDGE_RGB[cls]},${cls === 2 ? .055 : .05})`;
     b.lineWidth = 0.5 * dpr;
     b.stroke();
   }
@@ -595,8 +669,8 @@ function drawNetwork(f){
 
   // Active edges only, bucketed by brightness so each bucket is one stroke.
   const BUCKETS = 5;
-  const buckets = Array.from({length: BUCKETS*2}, () => []);
-  for (const [i, j, wt, gap] of graph.edges) {
+  const buckets = Array.from({length: BUCKETS*EDGE_CLASSES}, () => []);
+  for (const [i, j, wt, gap, sign] of graph.edges) {
     const a = graph.byIndex[i], c = graph.byIndex[j];
     if (!a || !c) continue;
     if (deadEdge.has(a.n) || deadEdge.has(c.n)) continue;
@@ -605,14 +679,14 @@ function drawNetwork(f){
       const s = act ? (act[i] - 0.5) * 2 : 0;
       if (s < 0.12) continue;                 // resting edges are in the base
       const b = Math.min(BUCKETS-1, Math.floor(s * BUCKETS));
-      buckets[gap*BUCKETS + b].push([P[a.li], P[c.li]]);
+      buckets[edgeClass(gap, sign)*BUCKETS + b].push([P[a.li], P[c.li]]);
       continue;
     }
-    buckets[gap*BUCKETS + BUCKETS-1].push([P[a.li], P[c.li]]);
+    buckets[edgeClass(gap, sign)*BUCKETS + BUCKETS-1].push([P[a.li], P[c.li]]);
   }
   buckets.forEach((segs, k) => {
     if (!segs.length) return;
-    const gap = k >= BUCKETS, b = k % BUCKETS;
+    const cls = Math.floor(k / BUCKETS), b = k % BUCKETS;
     const alpha = focus >= 0 ? 0.85 : (0.10 + 0.6 * (b+1)/BUCKETS);
     ectx.beginPath();
     for (const [pa, pc] of segs) {
@@ -620,7 +694,7 @@ function drawNetwork(f){
       ectx.moveTo(pa[0], pa[1]);
       ectx.bezierCurveTo(mx, pa[1], mx, pc[1], pc[0], pc[1]);
     }
-    ectx.strokeStyle = gap ? `rgba(107,122,146,${alpha})` : `rgba(90,209,196,${alpha})`;
+    ectx.strokeStyle = `rgba(${EDGE_RGB[cls]},${alpha})`;
     ectx.lineWidth = (focus >= 0 ? 1.5 : 0.6) * dpr;
     ectx.stroke();
   });
@@ -740,7 +814,7 @@ function describeNode(li){
     + `<div style="color:var(--dim);margin-bottom:3px">${deg} strong connections</div>`
     + rows
     + (dead ? '<div style="color:var(--bad);margin-top:5px">ABLATED - alt-click to restore</div>'
-            : '<div style="color:var(--dim);margin-top:5px">click to pin, alt-click to ablate</div>');
+            : '<div style="color:var(--dim);margin-top:5px">click to pin &middot; double-click to graph it &middot; alt-click to ablate</div>');
 }
 
 function netDefaultInfo(){
@@ -755,8 +829,8 @@ net.addEventListener('mousemove', ev => {
   if(best === hover) return;
   hover = best;
   net.style.cursor = best >= 0 ? 'pointer' : 'default';
-  if(best >= 0) $('netinfo').innerHTML = describeNode(best);
-  else if(pinned >= 0) $('netinfo').innerHTML = describeNode(pinned);
+  if(best >= 0) setHTML('netinfo', describeNode(best));
+  else if(pinned >= 0) setHTML('netinfo', describeNode(pinned));
   else netDefaultInfo();
 });
 
@@ -768,16 +842,26 @@ net.addEventListener('click', ev => {
     // Alt-click is the laser: kill the cell, or revive it if already dead.
     const dead = (frame && frame.telemetry.ablated || []).includes(name);
     cmd({cmd: dead ? 'restore_cell' : 'ablate', cell: name})
-      .then(() => { $('netinfo').innerHTML = describeNode(hit); });
+      .then(() => { setHTML('netinfo', describeNode(hit)); });
     return;
   }
   pinned = (pinned === hit) ? -1 : hit;
-  $('netinfo').innerHTML = pinned >= 0 ? describeNode(pinned) : describeNode(hit);
+  setHTML('netinfo', pinned >= 0 ? describeNode(pinned) : describeNode(hit));
+});
+
+net.addEventListener('dblclick', ev => {
+  // Straight from the graph to the trace panel. The two-step route (pin,
+  // then press "watch pinned cell") is still there, but nobody finds it.
+  const hit = netHitTest(ev);
+  if(hit < 0) return;
+  pinned = hit;
+  watchPinned();
+  setHTML('netinfo', describeNode(hit));
 });
 
 net.addEventListener('mouseleave', () => {
   hover = -1;
-  if(pinned >= 0) $('netinfo').innerHTML = describeNode(pinned);
+  if(pinned >= 0) setHTML('netinfo', describeNode(pinned));
   else netDefaultInfo();
 });
 

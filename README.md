@@ -8,7 +8,7 @@ medium, and runs the animal from a fertilised egg through four larval stages to
 senescence and death. You can poke it anywhere on its body, knock out genes by
 name, laser-ablate individual neurons, and run the standard behavioural assays.
 
-![Arena view: an adult worm crawling, with dorsal and ventral body-wall muscle activation drawn along the body and live neuron traces in the sidebar](docs/screenshot.png)
+![Arena view: an adult worm mid-undulation, dorsal and ventral body-wall muscle activation drawn along the body in teal and violet, its recent track behind it and a scale bar](docs/screenshot.png)
 
 *Teal is dorsal muscle, purple is ventral. The alternation running down the body
 is the undulatory wave that moves the animal.*
@@ -173,7 +173,7 @@ loss.
 
 ### Network view
 
-![Network view with AVAL pinned, showing all 106 of its connections highlighted while the rest of the graph dims](docs/network.png)
+![Network view with AVAL pinned, showing all 106 of its connections highlighted while the rest of the graph dims. Link colour is the synapse sign derived per edge from postsynaptic receptor expression: teal excitatory, orange inhibitory, grey gap junction](docs/network.png)
 
 All 448 cells laid out sensory to interneuron to motor to muscle, ordered to
 minimise edge crossings, with node brightness tracking live drive. Hover any

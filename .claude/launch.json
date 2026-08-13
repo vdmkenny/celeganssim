@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "worm-viewer",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": [
+        "-m",
+        "worm",
+        "serve",
+        "--port",
+        "8901"
+      ],
+      "port": 8901
+    }
+  ]
+}
