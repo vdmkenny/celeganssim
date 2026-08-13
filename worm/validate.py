@@ -324,6 +324,40 @@ def _posterior_innervation():
                 + " (published ~10)")
 
 
+@check("whole-cell input resistance matches the patch-clamp measurement",
+       "patch clamp measures the INTACT cell, so the quantity to compare is "
+       "leak plus gap plus tonic synaptic conductance, not the leak alone: "
+       "neuron 1.6-8 GOhm, muscle 1.0 GOhm",
+       "Goodman et al. 1998 Neuron 20:763; Jospin et al. 2002 J Cell Biol "
+       "159:337 (muscle 1.0 +/- 0.08 GOhm, n=10)",
+       section="consistency",
+       xfail="the muscle is 6x too leaky once its own synapses are counted: "
+             "0.15 GOhm against the measured 1.0, because tonic synaptic "
+             "conductance is 5.38 nS against a 1 nS leak. The neuron median "
+             "lands at 1.59 GOhm, just under the published range, for the "
+             "same reason at 46%. Setting G_leak to the measured whole-cell "
+             "value and then adding synaptic conductance on top double-counts, "
+             "and it is the same root cause as the unphysical leak reversals: "
+             "the release variable rests at 54.5% of its maximum (issue #17)")
+def _whole_cell_r():
+    from .connectome import Connectome
+    from .genome import Genome
+    from .nervous_system import NervousSystem
+    c = Connectome.load()
+    ns = NervousSystem(c, Genome.load())
+    tot = (ns.G_leak + (ns.Gg_eff * ns.p.g_gap).sum(axis=1)
+           + ns.s_eq * (ns.Gs_eff * ns.g_syn_row).sum(axis=1))
+    m = c.is_muscle
+    r_neu = float(np.median(1.0 / tot[~m]))
+    r_mus = float(np.median(1.0 / tot[m]))
+    ok = 1.6 <= r_neu <= 8.0 and 0.8 <= r_mus <= 1.2
+    return ok, (f"whole-cell R_in: neuron median {r_neu:.2f} GOhm "
+                f"(published 1.6-8), muscle median {r_mus:.2f} GOhm "
+                f"(published 1.0); tonic synaptic conductance is "
+                f"{100 * float(np.median(ns.s_eq * (ns.Gs_eff * ns.g_syn_row).sum(axis=1)[m])) / float(np.median(tot[m])):.0f}% "
+                f"of the muscle total")
+
+
 @check("leak reversals stay inside the range an ion could supply",
        "E_leak is a battery made of real ionic gradients, so it cannot sit "
        "below the potassium equilibrium (about -80 mV) or above the sodium "
@@ -491,6 +525,10 @@ def _passive():
     c = Connectome.load()
     ns = NervousSystem(c, Genome.load())
     p = ns.p
+    # Leak-only, which is how these constants are DEFINED. The intact-cell
+    # comparison is a separate check (see "whole-cell input resistance"),
+    # because adding synaptic conductance on top of a leak already set to
+    # the measured whole-cell value double-counts.
     r_in = 1.0 / p.G_leak            # GOhm, since nS
     tau = p.C / p.G_leak             # ms, since pF/nS
     ava = c.Gg[c.idx("AVAR"), c.idx("AVAL")] * p.g_gap * 1000.0   # pS
