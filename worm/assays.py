@@ -40,10 +40,15 @@ def _torus_dist(a: np.ndarray, b: np.ndarray, width: float, height: float) -> fl
 # single-animal version here is a time-fraction analogue, so the geometry is a
 # modelling choice -- but a named one, expressed relative to the arena so it
 # cannot silently drift from the physics.
-CHEMO_ARENA = (150.0, 110.0)        # open field: too large to wrap in a run,
-                                    # because on a small torus the near band was
-                                    # 30% of the arena and a blind ballistic
-                                    # walker scored CI 0.6-0.7 on wrap-throughs
+# The arena is toroidal (Environment.wrap) and scoring uses torus distance,
+# so a wrap is measured correctly rather than read as a jump. What the size
+# buys is the SCORING GEOMETRY: on the old 60x44 plate the near band covered
+# 30% of the surface, so a blind ballistic walker occupied it by chance and
+# scored CI 0.6-0.7, which is what an earlier chemotaxis pass was made of.
+# Here the near band is under 3%, and a six-minute run covers about 90 mm of
+# path against a 75 mm half-width, so wrapping is occasional rather than the
+# dominant behaviour it was on the small plate.
+CHEMO_ARENA = (150.0, 110.0)
 CHEMO_SOURCE_XY = (75.0, 55.0)      # peak central, starts ring around it
 CHEMO_SOURCE_SIGMA_MM = 25.0        # Gaussian spread of the salt source
 CHEMO_START_RING_MM = 35.0          # animals start on a ring this far from the peak

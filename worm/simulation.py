@@ -520,6 +520,42 @@ class WormSimulation:
         """
         self._food_memory_s = self.state.t - seconds
 
+    def _update_gradient_signals(self) -> None:
+        """Sample the salt field at the head for klinokinesis.
+
+        Sampled here rather than inside spontaneous_current so the signal
+        keeps updating when the reversal generator is silenced, which
+        assays do.
+
+        dC/dt is low-passed over seconds the way ASE integrates: the head
+        sweeps dorsoventrally at gait frequency, so the raw derivative
+        carries a large fast component from the SWEEP riding on the slow
+        one from where the body is GOING, and only the slow part says
+        whether the animal is climbing.
+
+        The fast part is in principle the weathervane signal of klinotaxis
+        (Iino & Yoshida 2009 J Neurosci 29:5370). That was built and
+        measured out, and the record is worth keeping. Correlating against
+        the COMMANDED pacemaker phase fails outright: the calcium cascade
+        delays contraction about 0.44 s (Butler et al. 2015), some 75
+        degrees at gait frequency, and a quadrature error that large
+        washes the correlation away. Against the muscle activation
+        asymmetry, which is downstream of that delay, a steering gain does
+        produce drift up the gradient, but it does not survive being
+        measured: paired on the same seeds it fell from +6.6 mm at n=16 to
+        +3.5 mm at n=32 while t stayed near 1, which is what a null looks
+        like as data accumulates. Issue #20 owns the retry.
+        """
+        c = float(self.env.concentration(self.body.world_nodes()[0], "salt"))
+        if self._klino_c_prev is None:
+            self._klino_c_prev = c
+        inst = (c - self._klino_c_prev) / self.cfg.dt * 60.0
+        self._klino_c_prev = c
+        a_slow = self.cfg.dt / KLINO_TAU_S
+        self._klino_dcdt += a_slow * (inst - self._klino_dcdt)
+        # A head-sweep correlation was built here to drive klinotaxis
+        # and measured out; see the docstring and issue #20.
+
     def spontaneous_current(self) -> np.ndarray:
         """Scripted upstate generator: seeded Poisson pulses into AVA/AVE.
 
@@ -560,19 +596,6 @@ class WormSimulation:
         # changes rescale the pending waiting time (inhomogeneous Poisson by
         # time rescaling), so modulation acts immediately, not one interval
         # late.
-        c = float(self.env.concentration(self.body.world_nodes()[0], "salt"))
-        if self._klino_c_prev is None:
-            self._klino_c_prev = c
-        inst = (c - self._klino_c_prev) / self.cfg.dt * 60.0
-        self._klino_c_prev = c
-        # Low-passed: the undulating head sweeps across the gradient at gait
-        # frequency, so instantaneous dC/dt oscillates far above saturation
-        # and would slam the multiplier between floor and ceiling every
-        # stroke, averaging the heading signal away. ASE responses integrate
-        # over seconds, and Pierce-Shimomura's dC/dt used multi-second
-        # windows; the filter recovers the translational component.
-        alpha = self.cfg.dt / KLINO_TAU_S
-        self._klino_dcdt += alpha * (inst - self._klino_dcdt)
         dcdt_per_min = self._klino_dcdt
         gate = self.sensory._gain("salt_on")
         m = math.exp(-KLINO_GAIN * dcdt_per_min * gate)
@@ -779,6 +802,7 @@ class WormSimulation:
             * self._pace_drive[3] * dt
         I = self.sensory.compute(self.env, head, tail, dt,
                                  amplitude=cfg.sensory_amplitude)
+        self._update_gradient_signals()
         I = I + self.proprioceptive_current() + self.spontaneous_current()
         I = I + self.muscle_pacemaker_current(*self._pace_gated)
         sub_dt = (dt * 1000.0) / cfg.neural_substeps  # ms
