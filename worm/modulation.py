@@ -47,6 +47,23 @@ the RMD and SMD cells whose dorsal-ventral difference is the head bias
 (Pirri et al. 2009 Neuron 62:526), and it carries no signal. Widening the
 network's dynamic range is the prerequisite, not a larger gain here.
 
+THE PEPTIDERGIC HALF IS OFF BY DEFAULT, and the reason is measured rather
+than cautious. Bentley's 8,931 peptide edges load and gate correctly, but
+switching them into the dynamics costs two checks and, worse, confounds the
+one result this layer has earned. Summed edge weights reach 198 on a single
+cell at that density, the modulation feeds back into the cells whose
+activation drives release, and the loop runs away: deviations grow and the
+animal slows to a halt over three minutes. Normalising weights to net
+polarity in [-1, 1] fixes the instability but rescales everything, and
+re-deriving the gain against that scale lands on a cliff: at 3.5 food
+slowing is 5.9% and too weak, at 4.5 it is 24.5% but the animal also
+reverses 6 times a minute on food where it should reverse less, so most of
+that "slowing" is just interrupted forward motion rather than DOP-3
+inhibition. Enabling peptides therefore needs the reversal threshold
+re-derived alongside the gain, which is issue #17's compressed dynamic
+range again. The data, the receptor signs and the unc-31/egl-3 gating are
+kept and checked so that work starts from them.
+
 Knockouts act where the biology puts them. A ligand gene (cat-2, tph-1,
 tdc-1, tbh-1) removes the transmitter while leaving every receptor in place,
 which is what the mutant is; a receptor gene (dop-3, mod-1, lgc-55 and the
@@ -90,12 +107,19 @@ MOD_GAIN_PA = 0.6
 class MonoamineLayer:
     """Per-ligand release pools and per-cell receptor weights."""
 
-    def __init__(self, conn, genome):
+    def __init__(self, conn, genome, peptides: bool = False):
         self.conn = conn
         self.genome = genome
         raw = json.loads((data_dir() / "monoamines.json").read_text())
-        self.edges = raw["edges"]
-        self.ligand_gene = raw["ligand_gene"]
+        self.edges = list(raw["edges"])
+        self.ligand_gene = dict(raw["ligand_gene"])
+        self.global_genes: list[str] = []
+        self._peptide_ligands: set[str] = set()
+        if peptides:
+            pep = json.loads((data_dir() / "peptides.json").read_text())
+            self.edges += pep["edges"]
+            self.global_genes = list(pep["global_genes"])
+            self._peptide_ligands = {e["ligand"] for e in pep["edges"]}
         self.ligands = sorted({e["ligand"] for e in self.edges})
         idx = conn.index
         # Source cells per ligand, as indices into the simulated network.
@@ -130,6 +154,21 @@ class MonoamineLayer:
                 continue
             self.W[e["ligand"]][idx[e["post"]]] += e["sign"]
 
+    def _global_scale(self, ligand: str) -> float:
+        """Dense-core vesicle machinery, peptides only.
+
+        unc-31 removes regulated peptide release outright and egl-3 removes
+        the peptides needing proprotein processing, which is most of them,
+        so either silences the peptidergic half and spares the monoamines.
+        """
+        if ligand not in self._peptide_ligands:
+            return 1.0
+        for gene in self.global_genes:
+            resolved = self.genome.resolve(gene)
+            if resolved is not None and resolved in self.genome.knockouts:
+                return 0.0
+        return 1.0
+
     def _ligand_scale(self, ligand: str) -> float:
         """1.0 if the animal can still make this monoamine, else 0."""
         gene = self.ligand_gene.get(ligand)
@@ -154,7 +193,8 @@ class MonoamineLayer:
             src = self._src[lig]
             if not len(src):
                 continue
-            raw = float(np.mean(act[src])) * self._ligand_scale(lig)
+            raw = (float(np.mean(act[src])) * self._ligand_scale(lig)
+                   * self._global_scale(lig))
             pool = self._pool[lig]
             if pool is None:
                 pool = self._pool[lig] = raw

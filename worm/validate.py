@@ -901,6 +901,44 @@ def _che1():
         f"salt gain {g.sensory_scale('salt')}, odour gain {g.sensory_scale('odor')}"
 
 
+@check("the peptidergic layer is signed and gated by its release machinery",
+       "neuropeptides are released from dense-core vesicles, so unc-31 and "
+       "egl-3 silence the whole layer at once while leaving monoamines "
+       "alone; every receptor must carry a sign from published coupling, "
+       "and npr-1 must be driven by its own ligands FLP-18 and FLP-21",
+       "Bentley et al. 2016 PLoS Comput Biol 12:e1005283; de Bono & "
+       "Bargmann 1998 Cell 94:679 and Rogers et al. 2003 Nat Neurosci 6:1178 "
+       "(npr-1); Speese et al. 2007 J Neurosci 27:6150 (unc-31)",
+       section="consistency")
+def _peptide_layer():
+    import json
+    from .connectome import Connectome
+    from .genome import Genome
+    from .modulation import MonoamineLayer
+    from .paths import data_dir
+    p = json.loads((data_dir() / "peptides.json").read_text())
+    edges = p["edges"]
+    n1 = [e for e in edges if e["receptor"] == "npr-1"]
+    n1_lig = sorted({e["ligand"] for e in n1})
+    c, g = Connectome.load(), Genome.load()
+    layer = MonoamineLayer(c, g, peptides=True)
+    with_pep = sum(1 for lig in layer.ligands
+                   if lig in layer._peptide_ligands)
+    # unc-31 must silence peptides and leave the monoamines alone.
+    g.knock_out("unc-31")
+    layer.refresh()
+    pep_off = layer._global_scale("flp-21") == 0.0
+    mono_on = layer._global_scale("dopamine") == 1.0
+    ok = (not p["receptors_without_sign"] and n1_lig == ["flp-18", "flp-21"]
+          and len(n1) > 1000 and with_pep >= 15 and pep_off and mono_on)
+    return ok, (f"{len(edges)} peptide edges, {with_pep} ligands, all "
+                f"receptors signed; npr-1 on {len(n1)} edges driven by "
+                f"{n1_lig}; unc-31 silences peptides "
+                f"({'yes' if pep_off else 'NO'}) and spares monoamines "
+                f"({'yes' if mono_on else 'NO'}); dynamics off by "
+                f"default, see MonoamineLayer")
+
+
 @check("the monoamine layer is extrasynaptic and pharmacologically signed",
        "monoamines act by volume transmission, so their edges are ligand "
        "and receptor pairs rather than wiring: every edge must name a "

@@ -442,6 +442,68 @@ def build_monoamines() -> dict:
             "source": "Bentley et al. 2016 PLoS Comput Biol 12:e1005283"}
 
 
+# Neuropeptide receptor pharmacology. Twelve receptors carry the whole
+# Bentley 2016 peptidergic layer, and each is signed from its published
+# G-protein coupling rather than a family guess.
+#
+# npr-1  Gi/Go, the NPY-like receptor for FLP-18 and FLP-21 whose loss makes
+#        animals social and O2-avoidant (de Bono & Bargmann 1998 Cell 94:679;
+#        Rogers et al. 2003 Nat Neurosci 6:1178)
+# npr-2, npr-3, npr-4, npr-5, npr-11  NPY/FMRFamide-like, Gi/Go coupled
+#        (Cohen et al. 2009 Cell Metab 9:375 npr-1 family; Chalasani et al.
+#        2010 Nat Neurosci 13:615 npr-11 on AIA; Nathoo et al. 2001 PNAS
+#        98:14000 for the family's deorphanisation)
+# pdfr-1 Gs, the PDF receptor driving roaming (Barrios et al. 2012 Nat
+#        Neurosci 15:1675; Janssen et al. 2008 J Biol Chem 283:15241)
+# ntr-1  Gq, nematocin receptor, the oxytocin/vasopressin homologue
+#        (Beets et al. 2012 Science 338:543)
+# frpr-4 Gi/Go (Mertens et al. 2005 Biochem Biophys Res Commun 330:967)
+# egl-6  Gi/Go, inhibits HSN egg laying (Ringstad & Horvitz 2008 Nat
+#        Neurosci 11:1168)
+# ckr-2  Gq, cholecystokinin-like, raises feeding and locomotion (Janssen et
+#        al. 2008 Endocrinology 149:2826)
+# npr-17 Gi/Go, the opioid-like receptor (Cheong et al. 2015 Nat Commun
+#        6:9442)
+PEPTIDE_RECEPTOR_SIGN = {
+    "npr-1": -1.0, "npr-2": -1.0, "npr-3": -1.0, "npr-4": -1.0,
+    "npr-5": -1.0, "npr-11": -1.0, "npr-17": -1.0,
+    "frpr-4": -1.0, "egl-6": -1.0,
+    "pdfr-1": +1.0, "ntr-1": +1.0, "ckr-2": +1.0,
+}
+
+# Peptide release needs the dense-core vesicle machinery, so unc-31 (CAPS)
+# removes ALL peptidergic signalling at once and egl-3 (proprotein
+# convertase PC2) removes the peptides that need processing, which is most
+# of them. Both are network-wide lesions rather than per-ligand ones
+# (Speese et al. 2007 J Neurosci 27:6150; Kass et al. 2001 Dev Biol 237:173).
+PEPTIDE_GLOBAL_GENES = ["unc-31", "egl-3"]
+
+
+def build_peptides() -> dict:
+    """Bentley et al. 2016 peptidergic edges, per ligand and receptor.
+
+    Same extrasynaptic logic as the monoamines and the same shape, so the
+    modulation layer can carry both: source expresses the peptide, target
+    expresses a cognate receptor, no wiring implied.
+    """
+    rows = []
+    with open(RAW / "edgelist_NP.csv", newline="") as fh:
+        for r in csv.reader(fh):
+            if len(r) < 4:
+                continue
+            src, tgt, lig, rec = (x.strip() for x in r[:4])
+            if not src or not tgt:
+                continue
+            rows.append({"pre": src, "post": tgt, "ligand": lig,
+                         "receptor": rec,
+                         "sign": PEPTIDE_RECEPTOR_SIGN.get(rec, 0.0)})
+    unknown = sorted({r["receptor"] for r in rows if r["sign"] == 0.0})
+    return {"edges": rows, "receptor_sign": PEPTIDE_RECEPTOR_SIGN,
+            "global_genes": PEPTIDE_GLOBAL_GENES,
+            "receptors_without_sign": unknown,
+            "source": "Bentley et al. 2016 PLoS Comput Biol 12:e1005283"}
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     owmeta = json.loads((RAW / "owmeta_cache.json").read_text())
@@ -466,6 +528,11 @@ def main() -> None:
     connectome, cellinfo = build_connectome(neuron_info, muscle_info)
     (OUT / "connectome.json").write_text(json.dumps(connectome))
     (OUT / "cells.json").write_text(json.dumps(cellinfo, indent=1))
+    pep = build_peptides()
+    (OUT / "peptides.json").write_text(json.dumps(pep))
+    print(f"  peptides.json: {len(pep['edges'])} edges, "
+          f"{len(set(e['ligand'] for e in pep['edges']))} ligands, "
+          f"unsigned receptors {pep['receptors_without_sign']}")
     mono = build_monoamines()
     (OUT / "monoamines.json").write_text(json.dumps(mono))
     print(f"  monoamines.json: {len(mono['edges'])} edges, "

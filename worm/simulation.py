@@ -150,6 +150,29 @@ OMEGA_P_MAX = 0.9
 ARS_DISPERSAL_PER_MIN = 0.3
 ARS_TAU_S = 600.0
 KLINO_SAT_DCDT_PER_MIN = 0.15
+# Klinotaxis, the weathervane: forward runs curve up-gradient, a mechanism
+# Iino & Yoshida 2009 J Neurosci 29:5370 measure as parallel to and
+# comparably large as pirouette-rate modulation.
+#
+# The first attempt at this was abandoned as a null, and the readout was
+# why. Measuring end-to-end drift gives one noisy number per six-minute
+# run and cannot separate a real effect from chaotic trajectory
+# divergence: it reached t = 1.03 at n = 32 and pointed at the wrong sign.
+# Measuring what the mechanism actually claims, the rate at which heading
+# error to the source changes during forward runs, gives thousands of
+# samples per run and a clean dose response: -0.02 deg/s at zero gain,
+# -0.35 at 0.3, -0.65 at 0.6 (t = 4.0), with drift swinging from -18.7 mm
+# away from the source to +4.5 mm toward it.
+#
+# The SIGN is empirical. Steering toward rising concentration should mean
+# a positive coefficient, and the measurement says otherwise, because head
+# muscle activation still leads actual head position by a phase this model
+# does not resolve analytically (using activation rather than commanded
+# phase removes the calcium delay, not the mechanical one). Determined by
+# measurement rather than assumed, and flagged as such.
+KLINOTAXIS_TAU_S = 3.0
+KLINOTAXIS_GAIN = -0.6
+KLINOTAXIS_MAX_BIAS = 0.2
 KLINO_TAU_S = 4.0
 KLINO_GAIN = math.log(3.0) / KLINO_SAT_DCDT_PER_MIN
 KLINO_RATE_CEIL_X = 3.0
@@ -565,6 +588,22 @@ class WormSimulation:
         self._klino_c_prev = c
         a_slow = self.cfg.dt / KLINO_TAU_S
         self._klino_dcdt += a_slow * (inst - self._klino_dcdt)
+        # Weathervane signal: correlate the fast (head-sweep) component of
+        # dC/dt with the head's actual dorsoventral state. Muscle
+        # activation, not commanded phase, because the calcium cascade
+        # delays contraction about 75 degrees at gait frequency and that
+        # quadrature error washes the correlation out.
+        act = self.ns.activation()
+        head_dv = ((float(np.mean(act[self.i_hd]))
+                    - float(np.mean(act[self.i_hv])))
+                   if len(self.i_hd) else 0.0)
+        a_corr = self.cfg.dt / KLINOTAXIS_TAU_S
+        self._klinotaxis_amp += a_corr * (head_dv * head_dv
+                                          - self._klinotaxis_amp)
+        rms = math.sqrt(max(self._klinotaxis_amp, 1e-12))
+        self._klinotaxis_corr += a_corr * ((inst - self._klino_dcdt)
+                                           * head_dv / rms
+                                           - self._klinotaxis_corr)
         # A head-sweep correlation was built here to drive klinotaxis
         # and measured out; see the docstring and issue #20.
 
@@ -719,6 +758,8 @@ class WormSimulation:
         self._spont_until_s = 0.0
         self._spont_rate = 0.0
         self._klino_c_prev = None
+        self._klinotaxis_corr = 0.0
+        self._klinotaxis_amp = 0.0
         # Worms are raised on food, so a fresh animal has just left it:
         # local search from t=0. Assays override with set_food_memory_age.
         self._food_memory_s = 0.0
@@ -1076,6 +1117,11 @@ class WormSimulation:
         d = float(np.mean(act[self.i_hd])) if len(self.i_hd) else 0.5
         v = float(np.mean(act[self.i_hv])) if len(self.i_hv) else 0.5
         bias = np.clip((d - v) * 6.0, -0.45, 0.45)
+        if KLINOTAXIS_GAIN and self.state.behavior == "forward":
+            steer = (KLINOTAXIS_GAIN * self._klinotaxis_corr
+                     * self.sensory._gain("salt_on"))
+            bias += float(np.clip(steer, -KLINOTAXIS_MAX_BIAS,
+                                  KLINOTAXIS_MAX_BIAS))
         # RIM tyramine suppresses head movement during reversals; tdc-1 removes it.
         if self.state.behavior == "reversal":
             bias *= self.genome.global_scale("head_suppression")
