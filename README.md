@@ -118,6 +118,30 @@ comes from a travelling wave running along a gently curved body rather than
 from a deep static bend: bending harder saturates the muscle targets, kills
 the wave and the thrust with it, and the animal spins in place.
 
+### Modulation
+
+Monoamines do not travel down the wired connectome. A cell that makes dopamine
+releases it into the tissue and every cell carrying a cognate receptor
+responds, synaptic partner or not, so they are a second layer: 2,626
+ligand-receptor edges of which only 6% are also chemical synapses (Bentley et
+al. 2016). Each receptor carries the sign of its measured coupling, so DOP-3
+(Gi) inhibits where DOP-1 (Gq) excites on the same cell, and the ligand-gated
+chloride channels inhibit directly.
+
+Basal slowing falls out of it. Food contact excites the eight dopaminergic
+cells, dopamine reaches the cholinergic motor neurons through DOP-3, and the
+animal slows 13.9% on encountering a lawn, inside the measured band. It is
+mechanism rather than a formula, and the knockouts say so: `cat-2` slows 0.1%
+because it makes no dopamine, `tph-1` slows 16.1% because serotonin is not
+what carries this response, and `dop-1` slows *more* than wild type because
+removing the excitatory receptor leaves DOP-3 unopposed. Receptor genes are
+therefore experimental tools here, not inert annotations.
+
+The layer is deliberately quiet at rest. Release is measured as a deviation
+from the animal's own slow baseline, so an undisturbed animal receives no net
+modulation and the resting operating point every other constant is calibrated
+against does not move.
+
 ### Genetics
 
 Thirty-one loci are mapped onto the subsystems their products implement.
@@ -129,7 +153,7 @@ in:
 | `mec-4` | the six touch receptor neurons | gentle touch abolished, harsh touch intact |
 | `unc-25` | 28 cells: DD, VD, RME, AVL, DVB, RIS, RIB | GABA lost, animal hypercontracts |
 | `che-1` | ASEL, ASER | salt chemotaxis lost, odour intact |
-| `cat-2` | the eight dopaminergic neurons | basal slowing on food lost |
+| `cat-2` | the eight dopaminergic neurons | no dopamine: basal slowing and area-restricted search both lost |
 | `daf-2` | 158 cells | lifespan roughly doubles, requires `daf-16` |
 
 `worm gene <name>` resolves any of the 46,926 annotated loci to its WormBase ID,
@@ -265,6 +289,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | `worm/connectome.py` | wiring to conductance matrices, network layout |
 | `worm/nervous_system.py` | graded-potential dynamics, ablation |
 | `worm/sensory.py` | environment to current, mechanosensory receptive fields |
+| `worm/modulation.py` | slow monoamine layer: volume transmission by receptor |
 | `worm/body.py` | oscillator, muscle to curvature, low-Reynolds locomotion |
 | `worm/kinematics.py` | gait measurement: frequency, wavelength, wave direction |
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
@@ -286,6 +311,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | Expression | CeNGEN via wormneuroatlas | 128 neuron classes x 13,669 genes |
 | Cell classification | WormAtlas | lineage and anatomical class |
 | Receptor pharmacology | derived from RefSeq product descriptions | 72 ligand-gated receptors with ion selectivity |
+| Monoamine connectome | Bentley et al. 2016, via OpenWorm ConnectomeToolbox | 2,626 extrasynaptic edges naming ligand and receptor |
 
 The datasets disagree in specific ways, each handled in code where it arises:
 gap junctions are listed in both directions, so the matrix is filled directly
@@ -304,7 +330,7 @@ the model knows and what it assumes stays visible.
 
 `worm validate` runs 48 checks against published measurements: 33 behavioural
 (the animal is run and measured) and 15 consistency checks (parameter and data
-invariants). 36 pass. Twelve are registered expected failures, each naming the
+invariants). 37 pass. Eleven are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
@@ -324,6 +350,7 @@ activation also leads curvature by 8 degrees where the animal holds about 45.
 | Crawling speed | 0.239 mm/s | 0.20 +/- 0.04 mm/s |
 | Undulation amplitude | 21.2% body length | 19.3% |
 | Spontaneous reversals off food | 2.3 /min | ~2 /min, on food lower, `goa-1` higher |
+| Basal slowing on food | 13.9% (`cat-2` 0.1%, `tph-1` 16.1%) | slowing present, abolished without dopamine |
 | Local search vs dispersal | 1.8 vs 0.8 /min, `cat-2` stays at 0.4 | several-fold decay over ~30 min, dopamine-dependent |
 | Embryogenesis | 14.2 h | 14.2 h |
 | Hatch to adult | 50.8 h | 50.67 +/- 1.95 h |
@@ -376,6 +403,16 @@ potentials, developmental timings, body sizes, brood size, lifespan.
   surface that keeps every assay readable, and
   [docs/emergent-cpg.md](docs/emergent-cpg.md) records the attempts to shrink
   it further.
+- **Enhanced slowing is still a scalar.** The serotonergic response of a
+  food-deprived animal needs serotonin release to depend on feeding history,
+  which the monoamine layer does not model yet, so it stays a labelled
+  formula. Basal slowing no longer is: it was a scalar until the monoamine
+  layer gave it a pathway
+  ([issue #11](https://github.com/vdmkenny/celeganssim/issues/11)).
+- **The peptidergic layer is fetched but not built.** Bentley's 8,931
+  neuropeptide edges are pinned alongside the monoamine ones and unused; that
+  is the second half of
+  [issue #13](https://github.com/vdmkenny/celeganssim/issues/13).
 - **Initiative is generated, not emergent.** Spontaneous reversals come from
   a Poisson generator at the measured rates injected into the real backward
   command cells, and klinokinesis scales that rate with the measured

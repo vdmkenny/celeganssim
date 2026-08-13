@@ -53,6 +53,16 @@ what the model knows and what it assumes.
 | What is NOT claimed | habituation of the suprathreshold binary response: sensory-output depression cannot produce it in this wiring and deeper depression sensitises | expected failure, issue #16 |
 | Sensory injection amplitudes | tuned, one global constant, known-wrong scale | issue #12 |
 
+## Modulation
+
+| Claim | Basis | Evidence |
+|---|---|---|
+| Monoamines act extrasynaptically, by ligand and receptor | measured (Bentley et al. 2016): 2,626 edges, only 6% of them also chemical synapses | check "the monoamine layer is extrasynaptic and pharmacologically signed" |
+| Receptor signs from measured coupling, not heuristic | published pharmacology per receptor (Chase et al. 2004 dop-1 Gq, dop-3 Gi; Ringstad et al. 2009 lgc-53 chloride; Ranganathan et al. 2000 mod-1) | `RECEPTOR_SIGN` in scripts/build_data.py, all 2,626 edges signed |
+| Basal slowing on food, and its dissociation | mechanism: food contact excites the dopaminergic cells, DOP-3 inhibits cholinergic motor neurons. Gain tuned to Sawin et al. 2000's magnitude; the three knockout results are not tuned | check "food slowing dissociates by transmitter, as Sawin measured" |
+| Enhanced slowing | NOT claimed as mechanism: still a scalar, since serotonin release does not yet depend on feeding history | `food_slowing`, issue #11 |
+| The peptidergic layer | NOT claimed: 8,931 edges fetched and pinned, unbuilt | issue #13 |
+
 ## Life
 
 | Claim | Basis | Evidence |

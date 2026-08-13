@@ -316,6 +316,8 @@ class WormSimulation:
         self.ns = NervousSystem(self.conn, self.genome, seed=self.cfg.seed)
         from .sensory import SensorySystem  # local import: avoids a cycle
         self.sensory = SensorySystem(self.conn, self.genome)
+        from .modulation import MonoamineLayer
+        self.modulation = MonoamineLayer(self.conn, self.genome)
         self.body = Body(BodyParams(), seed=self.cfg.seed)
         self.rng = np.random.default_rng(self.cfg.seed)
         from .lifecycle import Lifecycle
@@ -789,15 +791,18 @@ class WormSimulation:
     def knock_out(self, gene: str) -> dict:
         rec = self.genome.knock_out(gene)
         self.ns.refresh_genetics()
+        self.modulation.refresh()
         return rec
 
     def restore(self, gene: str) -> None:
         self.genome.restore(gene)
         self.ns.refresh_genetics()
+        self.modulation.refresh()
 
     def reset_genome(self) -> None:
         self.genome.reset()
         self.ns.refresh_genetics()
+        self.modulation.refresh()
 
     # -- main loop ------------------------------------------------------
     def step(self) -> dict:
@@ -814,6 +819,8 @@ class WormSimulation:
                                  amplitude=cfg.sensory_amplitude)
         self._update_gradient_signals()
         I = I + self.proprioceptive_current() + self.spontaneous_current()
+        # Slow extrasynaptic modulation, zero at baseline by design.
+        I = I + self.modulation.current(self.ns.activation(), dt)
         I = I + self.muscle_pacemaker_current(*self._pace_gated)
         sub_dt = (dt * 1000.0) / cfg.neural_substeps  # ms
         for _ in range(cfg.neural_substeps):
@@ -1003,11 +1010,20 @@ class WormSimulation:
         """
         if food <= 0.01:
             return 1.0
-        dop = float(np.clip(self.genome.nt_scale("Dopamine"), 0.0, 1.0))
         ser = float(np.clip(self.genome.nt_scale("Serotonin"), 0.0, 1.0))
-        basal = 1.0 - 0.22 * dop * min(food, 1.0)
+        # BASAL slowing is gone from here, and is now a real pathway: food
+        # contact excites the dopaminergic cells, dopamine reaches the
+        # cholinergic motor neurons through DOP-3 in the monoamine layer,
+        # and the animal slows. Measured at 18.3% against Sawin's band, with
+        # cat-2 at 0.2% because it makes no dopamine and dop-1 slowing MORE
+        # because removing the excitatory receptor leaves DOP-3 unopposed.
+        # Deleting the scalar is the point of issue #11.
+        #
+        # ENHANCED slowing stays scripted for now: it needs serotonin
+        # release to depend on the animal's feeding history, which the
+        # monoamine layer does not model yet.
         enhanced = 1.0 - 0.35 * ser * min(food, 1.0) if self.life.starving else 1.0
-        return float(basal * enhanced)
+        return float(enhanced)
 
     def _update_behavior(self, dt: float, bwd_cmd: float) -> None:
         st = self.state

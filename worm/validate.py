@@ -1406,21 +1406,7 @@ def _ars():
        "genetically separable: cat-2 (no dopamine) abolishes BASAL slowing "
        "while tph-1 (no serotonin) leaves it intact, since the serotonergic "
        "enhanced response only appears in food-deprived animals",
-       "Sawin, Ranganathan & Horvitz 2000 Neuron 26:619",
-       xfail="two separate problems, both localised by ablation. The wild "
-             "type network produces NO slowing on its own (-1.0%), so the "
-             "scalar food_slowing() is the entire measured phenotype, which "
-             "is this issue's premise. Worse, cat-2 slows 26-41% where it "
-             "should not slow at all, and that is an ARTEFACT: killing the "
-             "six dopaminergic sensors CEP/ADE removes it completely "
-             "(-41.1% becomes +0.0%), and they are pinned at their rail on "
-             "food, activation 0.9997, which is the sensory saturation "
-             "issue #12 documents. With dopaminergic transmission zeroed by "
-             "cat-2 those saturated cells reach the network only "
-             "electrically, and that drags locomotion. Head steering is not "
-             "the route (dorsoventral asymmetry is unchanged). So issue #11 "
-             "is blocked on #12: the mutant control cannot be trusted while "
-             "a sensory neuron saturates on contact with food")
+       "Sawin, Ranganathan & Horvitz 2000 Neuron 26:619")
 
 
 def _sawin():

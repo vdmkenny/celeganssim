@@ -76,7 +76,22 @@ SENSORS = {
 # upstream error, so the sensory scale and the behavioural calibration
 # have to be re-derived together, not one at a time.
 TONIC_SCALE = 1.0
-TONIC_MODALITIES = ("food_mech", "oxygen_high", "oxygen_low")
+# Oxygen only. Food contact was here too and should not have been: a
+# steady oxygen field is exactly what a receptor should adapt away, but the
+# dopaminergic cells report bacterial texture underfoot, and basal slowing
+# persists for as long as the animal is on the lawn (Sawin, Ranganathan &
+# Horvitz 2000). Adapting it away made food a transient, so the monoamine
+# layer saw dopamine release fall BELOW its baseline while the animal sat
+# on food, which inverts the sign of everything downstream of it.
+TONIC_MODALITIES = ("oxygen_high", "oxygen_low")
+
+# Food contact keeps its steady drive, but not at the flat amplitude, which
+# pinned CEP and ADE at 0.9997 and produced the locomotion artefact of
+# issue #11. Scaled to keep them responsive instead of railed. Unlike
+# oxygen this costs nothing at the resting operating point every
+# behavioural constant is calibrated against, because off food the drive is
+# zero either way. TUNED to the engagement measured in that sweep.
+FOOD_MECH_SCALE = 0.12
 
 # Tonic sensors adapt: a receptor sitting in a steady field stops reporting
 # it, while changes still get through. URX responds to oxygen with a
@@ -292,6 +307,8 @@ class SensorySystem:
             gain = self._gain(modality)
             if modality in TONIC_MODALITIES:
                 gain *= TONIC_SCALE
+            elif modality == "food_mech":
+                gain *= FOOD_MECH_SCALE
             v = value * gain
             if modality in TONIC_MODALITIES:
                 lp = self._tonic_lp.get(modality, v)
