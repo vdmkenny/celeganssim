@@ -901,6 +901,51 @@ def _che1():
         f"salt gain {g.sensory_scale('salt')}, odour gain {g.sensory_scale('odor')}"
 
 
+@check("the monoamine layer is extrasynaptic and pharmacologically signed",
+       "monoamines act by volume transmission, so their edges are ligand "
+       "and receptor pairs rather than wiring: every edge must name a "
+       "receptor whose sign is known from its G-protein coupling or channel "
+       "selectivity, dopamine must come only from the eight dopaminergic "
+       "cells, and the layer must not simply reproduce the wired connectome",
+       "Bentley et al. 2016 PLoS Comput Biol 12:e1005283; Chase, Pepper & "
+       "Koelle 2004 Nat Neurosci 7:1096 (dop-3 Gi on cholinergic motor "
+       "neurons); Ringstad et al. 2009 Science 325:96 (lgc-53 chloride)",
+       section="consistency")
+def _monoamine_layer():
+    import json
+    import re
+    from .paths import data_dir
+    m = json.loads((data_dir() / "monoamines.json").read_text())
+    edges = m["edges"]
+    unsigned = m["receptors_without_sign"]
+    ligands = sorted({e["ligand"] for e in edges})
+    dop_src = sorted({e["pre"] for e in edges if e["ligand"] == "dopamine"})
+    expected_src = ["ADEL", "ADER", "CEPDL", "CEPDR", "CEPVL", "CEPVR",
+                    "PDEL", "PDER"]
+    mot = [e for e in edges if e["ligand"] == "dopamine"
+           and re.match(r"^(VA|VB|DA|DB|AS)\d+$", e["post"])]
+    inhib = sum(1 for e in mot if e["sign"] < 0)
+    # Extrasynaptic means NOT the wired graph: check the overlap is partial.
+    from .connectome import Connectome
+    c = Connectome.load()
+    wired = set()
+    idx = c.index
+    for e in edges:
+        if e["pre"] in idx and e["post"] in idx:
+            if c.Gs[idx[e["pre"]], idx[e["post"]]] > 0:
+                wired.add((e["pre"], e["post"]))
+    pairs = {(e["pre"], e["post"]) for e in edges}
+    overlap = len(wired) / max(len(pairs), 1)
+    ok = (not unsigned and len(ligands) == 4 and dop_src == expected_src
+          and len(mot) > 100 and inhib > 0 and overlap < 0.5)
+    return ok, (f"{len(edges)} edges, {len(ligands)} ligands, all receptors "
+                f"signed; dopamine from the {len(dop_src)} dopaminergic "
+                f"cells onto {len(mot)} A/B-class motor-neuron edges "
+                f"({inhib} inhibitory, the dop-3 basal-slowing route); "
+                f"{overlap:.0%} of monoamine pairs are also wired synapses, "
+                f"so the layer is genuinely extrasynaptic")
+
+
 @check("expression cache matches documented ground truth",
        "CeNGEN-derived cell sets reproduce the textbook cases: mec-4 in the "
        "six touch receptors, che-1 only in ASE, glc-3 in AIY, glr-1 in "

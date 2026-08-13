@@ -64,6 +64,18 @@ FILES: list[tuple[str, str, str, bool]] = [
     ("aconnectome_white_1986_whole.csv",
      f"{CTB}/aconnectome_white_1986_whole.csv",
      "White et al. 1986 connectome: comparison only, has no muscle edges", False),
+    ("edgelist_MA.csv",
+     f"{CTB}/edgelist_MA.csv",
+     "Bentley et al. 2016 monoaminergic edges, one row per "
+     "source, target, ligand, receptor. The aggregate matrix in the same "
+     "repository sums the four monoamines into one weight, which cannot "
+     "separate a dopamine edge from a serotonin one, so this is the file "
+     "that gets built", False),
+    ("edgelist_NP.csv",
+     f"{CTB}/edgelist_NP.csv",
+     "Bentley et al. 2016 neuropeptide edges, same four columns. Fetched "
+     "and pinned but NOT yet built: the dense peptidergic layer is the "
+     "second half of issue #13", False),
     ("owmeta_cache.json",
      f"{C302}/owmeta_cache.json",
      "OpenWorm owmeta neuron and muscle metadata", False),
@@ -78,6 +90,10 @@ FILES: list[tuple[str, str, str, bool]] = [
 # build: either upstream changed (investigate, then update the pin alongside
 # whatever recalibration the new data needs) or the download is corrupt.
 PINNED_SHA256: dict[str, str] = {
+    "edgelist_MA.csv":
+        "5a206a6743479f4ae11eb82456378051c5d9aeb56ea5c1f82b121671c7fa2aa3",
+    "edgelist_NP.csv":
+        "bec5f0c9526db1523ed73fb6a8b386de95d48a2fd5eae75a9a4889758102389b",
     "celegans_genome.fna.gz":
         "d62fb938c408acd0df3126aa38fd126d4a411f070e1a41ffa4f4a1056984cdd4",
     "celegans_annotation.gff.gz":

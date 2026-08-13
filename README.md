@@ -37,7 +37,7 @@ anything.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 47 checks against published measurements, in parallel
+worm validate         # 48 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -270,7 +270,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 47 checks: 33 behavioural, 14 consistency, gaps as expected failures |
+| `worm/validate.py` | 48 checks: 33 behavioural, 15 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry, provenance tags enforced by a check |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -302,9 +302,9 @@ rather than making it, so are not modelled as GABAergic.
 tagged measured, published, tuned or scripted, so the difference between what
 the model knows and what it assumes stays visible.
 
-`worm validate` runs 47 checks against published measurements: 33 behavioural
-(the animal is run and measured) and 14 consistency checks (parameter and data
-invariants). 35 pass. Twelve are registered expected failures, each naming the
+`worm validate` runs 48 checks against published measurements: 33 behavioural
+(the animal is run and measured) and 15 consistency checks (parameter and data
+invariants). 36 pass. Twelve are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
@@ -447,6 +447,8 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 
 **Connectome**
 - White, Southgate, Thomson & Brenner (1986), Phil. Trans. R. Soc. B 314:1
+- [Bentley et al. (2016), PLoS Comput. Biol. 12:e1005283](https://doi.org/10.1371/journal.pcbi.1005283) (monoamine and neuropeptide extrasynaptic networks)
+- [Chase, Pepper & Koelle (2004), Nat. Neurosci. 7:1096](https://doi.org/10.1038/nn1316) (DOP-3 on cholinergic motor neurons carries basal slowing)
 - [Cook et al. (2019), Nature 571:63](https://doi.org/10.1038/s41586-019-1352-7)
 - [Witvliet et al. (2021), Nature 596:257](https://doi.org/10.1038/s41586-021-03778-8)
 - [OpenWorm ConnectomeToolbox](https://github.com/openworm/ConnectomeToolbox) · [c302](https://github.com/openworm/c302) · [owmeta](https://github.com/openworm/owmeta)

@@ -374,6 +374,74 @@ def build_connectome(neuron_info: dict, muscle_info: dict) -> tuple[dict, dict]:
     return connectome, {"cells": cells, "summary": summary}
 
 
+# Receptor pharmacology for the monoamine layer. Each entry is the sign of
+# the receptor's action on the cell expressing it, from its G-protein
+# coupling or channel selectivity. These are the measured classes, not a
+# guess: Gi/Go coupling inhibits (lowers cAMP, opens GIRK-like conductance),
+# Gq and Gs excite, and the ligand-gated chloride channels inhibit directly.
+#
+# dop-1 Gq (Chase, Pepper & Koelle 2004 Nat Neurosci 7:1096)
+# dop-2 Gi/Go autoreceptor (Suo, Kimura & Van Tol 2006 J Neurosci 26:10082)
+# dop-3 Gi/Go, the receptor carrying basal slowing on cholinergic motor
+#       neurons (Chase 2004; Sanyal et al. 2004 EMBO J 23:473)
+# dop-4 Gs (Sugiura et al. 2005 J Neurochem 94:1146)
+# lgc-53 dopamine-gated chloride channel (Ringstad, Abe & Horvitz 2009
+#       Science 325:96)
+# ser-1 Gq, ser-4 Gi/Go, ser-7 Gs (Hobson et al. 2006; Olde & McCombie 1997;
+#       Hobson et al. 2003), mod-1 serotonin-gated chloride channel
+#       (Ranganathan, Cannon & Horvitz 2000 Nature 408:470)
+# ser-2 tyramine Gi/Go, tyra-2 Gq, tyra-3 Gq, lgc-55 tyramine-gated chloride
+#       (Rex & Komuniecki 2002; Pirri et al. 2009 Neuron 62:526)
+# octr-1 Gi/Go, ser-3 Gq, ser-6 Gs (Wragg et al. 2007; Suo et al. 2006)
+RECEPTOR_SIGN = {
+    "dop-1": +1.0, "dop-2": -1.0, "dop-3": -1.0, "dop-4": +1.0,
+    "lgc-53": -1.0,
+    "ser-1": +1.0, "ser-4": -1.0, "ser-5": +1.0, "ser-7": +1.0,
+    "mod-1": -1.0,
+    "ser-2": -1.0, "tyra-2": +1.0, "tyra-3": +1.0, "lgc-55": -1.0,
+    "octr-1": -1.0, "ser-3": +1.0, "ser-6": +1.0,
+}
+
+# Which gene has to be intact for a cell to RELEASE each monoamine, so a
+# knockout removes the ligand while leaving every receptor in place, which
+# is what the mutant actually is.
+LIGAND_GENE = {
+    "dopamine": "cat-2",       # tyrosine hydroxylase
+    "serotonin": "tph-1",      # tryptophan hydroxylase
+    "tyramine": "tdc-1",       # tyrosine decarboxylase
+    "octopamine": "tbh-1",     # tyramine beta-hydroxylase, downstream of tdc-1
+}
+
+
+def build_monoamines() -> dict:
+    """Bentley et al. 2016 monoaminergic edges, per ligand and receptor.
+
+    Extrasynaptic: an edge means the source expresses the biosynthetic
+    enzyme for that monoamine and the target expresses a cognate receptor,
+    so this layer does NOT follow the wired connectome and cannot be
+    derived from it. Kept as an edge list rather than a matrix because the
+    receptor identity is the whole point: dop-3 inhibits where dop-1
+    excites, and a receptor knockout has to be able to remove one without
+    the other.
+    """
+    rows = []
+    with open(RAW / "edgelist_MA.csv", newline="") as fh:
+        for r in csv.reader(fh):
+            if len(r) < 4:
+                continue
+            src, tgt, lig, rec = (x.strip() for x in r[:4])
+            if not src or not tgt:
+                continue
+            rows.append({"pre": src, "post": tgt, "ligand": lig,
+                         "receptor": rec,
+                         "sign": RECEPTOR_SIGN.get(rec, 0.0)})
+    unknown = sorted({r["receptor"] for r in rows if r["sign"] == 0.0})
+    return {"edges": rows, "ligand_gene": LIGAND_GENE,
+            "receptor_sign": RECEPTOR_SIGN,
+            "receptors_without_sign": unknown,
+            "source": "Bentley et al. 2016 PLoS Comput Biol 12:e1005283"}
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     owmeta = json.loads((RAW / "owmeta_cache.json").read_text())
@@ -398,6 +466,11 @@ def main() -> None:
     connectome, cellinfo = build_connectome(neuron_info, muscle_info)
     (OUT / "connectome.json").write_text(json.dumps(connectome))
     (OUT / "cells.json").write_text(json.dumps(cellinfo, indent=1))
+    mono = build_monoamines()
+    (OUT / "monoamines.json").write_text(json.dumps(mono))
+    print(f"  monoamines.json: {len(mono['edges'])} edges, "
+          f"{len(set(e['ligand'] for e in mono['edges']))} ligands, "
+          f"unsigned receptors {mono['receptors_without_sign']}")
     s = cellinfo["summary"]
     print(f"  {s['n_cells']} cells, {s['n_edges']} edges {s['edges_by_type']}")
     print(f"  kinds: {s['cells_by_kind']}")
