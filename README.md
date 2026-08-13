@@ -92,7 +92,13 @@ artifact (on a small toroidal plate the scoring band covered 30% of the
 surface, and a blind walker scored 0.6-0.7 by wrapping through it). On the
 corrected open-field assay the biased walk is not yet strong enough to
 out-drift a blind animal, because pirouettes that reorient only ~26 degrees
-cannot re-randomize the walk; that cap is a tracked expected failure.
+cannot re-randomize the walk. With the omega turn fixed that half now
+works, and the wild type out-drifts a blind animal by 7 mm over six
+minutes, but both still drift outward: an unbiased walker released on a
+ring moves away by plain 2D geometry, and pirouette-rate modulation alone
+cannot overcome it. The missing half is klinotaxis, the weathervane
+curving of forward runs (Iino & Yoshida 2009), a tracked expected
+failure.
 
 The search itself has a history: dopamine carries the memory of food. In the
 minutes after leaving a lawn the reversal rate runs at the local-search value,
@@ -107,8 +113,10 @@ reversal longer through the command balance itself, so harsh touch earns
 both a longer retreat and a sharper turn without either being scripted to.
 Escape vigor is latched at reversal onset from the command excess, the
 published AVA-transient relationship; the omega turn coils the anterior
-body, though its reorientation is mechanically capped well below the real
-~140 degrees for now (a tracked expected failure).
+body and reorients it by about 133 degrees, the measured figure. The turn
+comes from a travelling wave running along a gently curved body rather than
+from a deep static bend: bending harder saturates the muscle targets, kills
+the wave and the thrust with it, and the animal spins in place.
 
 ### Genetics
 
@@ -296,7 +304,7 @@ the model knows and what it assumes stays visible.
 
 `worm validate` runs 45 checks against published measurements: 32 behavioural
 (the animal is run and measured) and 13 consistency checks (parameter and data
-invariants). 34 pass. Eleven are registered expected failures, each naming the
+invariants). 35 pass. Ten are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
@@ -504,6 +512,8 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 **Chemosensation and navigation**
 - [Chalasani et al. (2007), Nature 450:63](https://doi.org/10.1038/nature06292)
 - [Pierce-Shimomura, Morse & Lockery (1999), J. Neurosci. 19:9557](https://doi.org/10.1523/JNEUROSCI.19-21-09557.1999)
+- [Iino & Yoshida (2009), J. Neurosci. 29:5370](https://doi.org/10.1523/JNEUROSCI.3633-08.2009) (klinotaxis and klinokinesis as parallel salt-chemotaxis mechanisms)
+- [Broekmans, Rodgers, Ryu & Stephens (2016), eLife 5:e17227](https://doi.org/10.7554/eLife.17227) (deep body bends of the omega turn)
 - [Gray, Hill & Bargmann (2005), PNAS 102:3184](https://doi.org/10.1073/pnas.0409009101) (spontaneous reversal rates on and off food; local search decays to dispersal)
 - [Hills, Brockie & Maricq (2004), J. Neurosci. 24:1217](https://doi.org/10.1523/JNEUROSCI.1569-03.2004) (area-restricted search requires dopamine)
 - [Segalat, Elkes & Kaplan (1995), Science 267:1648](https://doi.org/10.1126/science.7886454) (goa-1 hyperreversal)

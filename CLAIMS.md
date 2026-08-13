@@ -61,9 +61,10 @@ what the model knows and what it assumes.
 | daf-2 longevity requires daf-16; eat-2 does not | measured epistasis (Kenyon 1993; Lakowski & Hekimi 1998) | check "daf-2 longevity requires daf-16" |
 | eat-2 is dietary restriction by mechanism | measured pumping deficit, ~0.2x (Raizen, Lee & Avery 1995; McKay et al. 2004), driving real intake | `pumping_rate(pump_scale=...)` |
 | Spontaneous reversals at measured rates; food and goa-1 modulate them | measured rates (Gray et al. 2005; Segalat 1995), **scripted** generator: Poisson pulses into the real backward command cells | check "the animal reverses spontaneously" |
-| Chemotaxis | NOT claimed: an earlier CI pass was a torus-arena artifact; on the open field klinokinesis cannot bias a walk whose omega turns reorient ~26 degrees (issue #19). The coupling machinery (Pierce-Shimomura 1999 shape, ASE-gated) is in place and waiting on turn sharpness | expected failure, checks "chemotaxis discriminates salt-blind mutants" and "the omega turn reorients as sharply as the real one" |
+| Chemotaxis | NOT claimed: an earlier CI pass was a torus-arena artifact; with real 133-degree turns klinokinesis now beats a blind animal by 7 mm over six minutes, but rate modulation alone cannot overcome the outward drift of a 2D walk. The missing half is klinotaxis (Iino & Yoshida 2009, issue #20) | expected failure, checks "chemotaxis discriminates salt-blind mutants" and "the omega turn reorients as sharply as the real one" |
 | Local search decays to dispersal after leaving food; dopamine required | measured endpoints (Gray et al. 2005), decay constant a labelled GUESS through their time course; cat-2 by mechanism (Hills et al. 2004) | check "leaving food starts local search" |
 | Omega probability rises with reversal length; stimulus strength holds reversals longer | published curve (Gray et al. 2005 Fig. 2, read off the plot); duration held by the real command balance, floor tuned | check "omega turns follow long reversals, not a coin" |
+| The omega turn reorients about 133 degrees, as measured | tuned to the measured reorientation (Gray et al. 2005; Broekmans et al. 2016), through a mechanism that is itself a finding: turning comes from a wave on a gently curved body, not a deep bend | check "the omega turn reorients as sharply as the real one" |
 
 ## Where the honest edges are enforced
 

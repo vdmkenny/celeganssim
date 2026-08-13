@@ -984,15 +984,16 @@ def _swim():
 @check("chemotaxis discriminates salt-blind mutants",
        "wild type chemotaxes up a salt gradient; che-1 (no ASE) does not",
        "Ward 1973; Bargmann & Horvitz 1991; Pierce-Shimomura et al. 1999",
-       xfail="honest geometry took the pass away: on the old 60x44 torus "
-             "arena the near band was 30% of the surface and a blind "
-             "ballistic walker scored CI 0.6-0.7 by wrapping through it, "
-             "which is what the earlier pass was made of. On the open "
-             "field the wild type does not yet out-drift a blind animal: "
-             "klinokinesis alone cannot bias a walk whose pirouettes "
-             "reorient only ~26-42 degrees (issue #19 owns the turn "
-             "sharpness cap), and the klinotaxis steering pathway has no "
-             "demonstrated salt gain (issue #7 readout scope)")
+       xfail="klinokinesis works but is only half of chemotaxis. With real "
+             "133-degree omega turns the wild type now out-drifts a blind "
+             "animal by 7 mm over six minutes (-0.9 mm against che-1's "
+             "-7.9 mm), so gradient-modulated pirouettes are doing genuine "
+             "work. Both are still negative because an unbiased walker "
+             "started on a ring drifts OUTWARD by 2D geometry, and rate "
+             "modulation alone cannot overcome that. The missing half is "
+             "klinotaxis, the weathervane curving of forward runs, which "
+             "Iino & Yoshida 2009 measure as a parallel and comparably "
+             "large mechanism (issue #20)")
 def _chemo():
     from .assays import run_assay
     # Six minutes, not two: with runs ending every ~25 s the walk is
@@ -1221,12 +1222,7 @@ def _vigor():
        "(Gray 2005: omega turns sharply redirect the animal, on the order "
        "of 140 degrees)",
        "Gray, Hill & Bargmann 2005 PNAS 102:3184; Broekmans et al. 2016 "
-       "eLife 5:e17227",
-       xfail="the muscle-target range cannot hold a head-past-tail coil and "
-             "a propagating wave at once: the best wave-alive coil reaches "
-             "26 degrees against 42 for a plain exit; a 140 degree turn in "
-             "a 2 s crawl needs a turn radius near a sixth of a body "
-             "length (issue #19)")
+       "eLife 5:e17227")
 def _omega_sharpness():
     def episode(seed):
         s = _quiet(_sim(seed=seed))

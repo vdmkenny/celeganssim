@@ -128,12 +128,19 @@ SPONT_PULSE_S = 1.2          # order of the behavioural bout trigger, well
 # Graded escape drive (see the reversal branch of the motor-pool logic):
 # at threshold the backward drive starts at BASE and gains PER_THRESHOLD
 # for each additional threshold-worth of command excess, capped at MAX.
-# The omega ventral sweep: bias strength and duration (cfg.omega_s) are
-# tuned together to the measured post-omega reorientation (Gray, Hill &
-# Bargmann 2005: omega turns sharply redirect the animal, mean heading
-# change well above a plain reversal exit).
-OMEGA_HEAD_BIAS = 0.35
-OMEGA_COIL_EXTENT_BL = 0.5
+# The omega ventral sweep. Turn rate was measured against both knobs
+# (scratch sweep, recorded here because the result is counter-intuitive):
+# turning comes from a traveling wave running along an already-curved
+# body, NOT from a deep static bend. A hard anterior bias saturates the
+# muscle targets, kills the wave and the thrust with it, and the animal
+# holds a static curl at 4-9 deg/s. A GENTLE bias spread over the WHOLE
+# body curves the swimming path instead, reaching 65-80 deg/s, which is
+# the 140 deg turn Gray, Hill & Bargmann 2005 and Broekmans et al. 2016
+# report for a real omega in about two seconds. Both constants are tuned
+# to that measured reorientation; beyond extent ~1.3 BL the body folds
+# onto itself and the turn direction becomes unstable.
+OMEGA_HEAD_BIAS = 0.18
+OMEGA_COIL_EXTENT_BL = 1.0
 BWD_DRIVE_BASE = 0.80
 BWD_DRIVE_PER_THRESHOLD = 0.15
 BWD_DRIVE_MAX = 1.0
@@ -194,7 +201,7 @@ class SimConfig:
     baseline_tau_s: float = 8.0
     reversal_min_s: float = 0.9
     reversal_max_s: float = 4.0
-    omega_s: float = 2.0
+    omega_s: float = 3.0
     refractory_s: float = 0.6
     tonic_forward: float = 0.62   # baseline AVB drive -> spontaneous forward
     command_gain: float = 9.0
