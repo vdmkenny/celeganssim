@@ -313,6 +313,10 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | Receptor pharmacology | derived from RefSeq product descriptions | 72 ligand-gated receptors with ion selectivity |
 | Monoamine connectome | Bentley et al. 2016, via OpenWorm ConnectomeToolbox | 2,626 extrasynaptic edges naming ligand and receptor |
 
+Sources are audited for peer review and corrections by
+`scripts/audit_citations.py`, with the findings in
+[docs/citations.md](docs/citations.md).
+
 The datasets disagree in specific ways, each handled in code where it arises:
 gap junctions are listed in both directions, so the matrix is filled directly
 rather than symmetrised; cell naming differs between sources and is normalised;
@@ -549,7 +553,7 @@ potentials, developmental timings, body sizes, brood size, lifespan.
 - [Pirri et al. (2009), Neuron 62:526](https://doi.org/10.1016/j.neuron.2009.04.013)
 
 **Chemosensation and navigation**
-- [Chalasani et al. (2007), Nature 450:63](https://doi.org/10.1038/nature06292)
+- [Chalasani et al. (2007), Nature 450:63](https://doi.org/10.1038/nature06292) (carries a 2016 corrigendum; the part we use survives it, see [docs/citations.md](docs/citations.md))
 - [Pierce-Shimomura, Morse & Lockery (1999), J. Neurosci. 19:9557](https://doi.org/10.1523/JNEUROSCI.19-21-09557.1999)
 - [Iino & Yoshida (2009), J. Neurosci. 29:5370](https://doi.org/10.1523/JNEUROSCI.3633-08.2009) (klinotaxis and klinokinesis as parallel salt-chemotaxis mechanisms)
 - [Broekmans, Rodgers, Ryu & Stephens (2016), eLife 5:e17227](https://doi.org/10.7554/eLife.17227) (deep body bends of the omega turn)

@@ -74,7 +74,11 @@ GPCR_RULES: list[tuple[str, str]] = [
 # Applied only when tier 1 found nothing.
 FAMILY_FILL: dict[str, tuple[str, str, str]] = {
     "glc": ("Glutamate", INH,
-            "Cully et al. 1994; Chalasani et al. 2007 (glc-3 in AWC->AIY)"),
+            "Cully et al. 1994; Chalasani et al. 2007 (glc-3 in AWC->AIY; "
+             "that paper carries a 2016 corrigendum over invalid imaging "
+             "movies, but AIY properties were fully supported by the "
+             "reanalysis and this is a receptor-identity claim: "
+             "see docs/citations.md)"),
     "acc": ("Acetylcholine", INH,
             "Putrenko, Zakikhani & Dent 2005 JBC 280:6392"),
     "nmr": ("Glutamate", EXC,

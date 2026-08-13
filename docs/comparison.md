@@ -163,7 +163,7 @@ for the question.
 - [openworm/sibernetic](https://github.com/openworm/sibernetic)
 - [OpenWorm documentation, project history](https://docs.openworm.org/fullhistory/)
 - [An integrative data-driven model simulating C. elegans brain, body and environment interactions (Nature Computational Science, 2024)](https://www.nature.com/articles/s43588-024-00738-w)
-- [MetaWorm preprint](https://www.biorxiv.org/content/10.1101/2024.02.22.581686v2.full)
+- [MetaWorm preprint](https://doi.org/10.1101/2024.02.22.581686) (bioRxiv, NOT peer reviewed; the peer-reviewed version is the Nature Computational Science paper above)
 - [A simulated C. elegans with biophysically detailed neurons and muscle dynamics](https://www.nature.com/articles/s43588-024-00740-2)
 - [Boyle, Berri & Cohen 2012, Gait modulation in C. elegans: an integrated neuromechanical model](https://pmc.ncbi.nlm.nih.gov/articles/PMC3296079/)
 - [Izquierdo & Beer 2013, Connecting a connectome to behavior: an ensemble of neuroanatomical models of C. elegans klinotaxis](https://journals.plos.org/ploscompbiol/article?id=10.1371%2Fjournal.pcbi.1002890)
