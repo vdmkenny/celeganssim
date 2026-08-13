@@ -22,6 +22,8 @@ real, wildly heterogeneous connectivity from saturating.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from .connectome import Connectome
@@ -221,6 +223,29 @@ class NeuralParams:
     trn_dep_onset_ms = 8000.0
     trn_dep_recovery_ms = 90000.0
     beta = 0.125      # sigmoid steepness, 1/mV
+    # How far above its own resting operating point each cell's release
+    # sigmoid sits. Zero is the Wicks/Kunert convention, which centres the
+    # sigmoid on rest and therefore leaves every synapse releasing at 54.5%
+    # of maximum while the animal is doing nothing: that is what drives
+    # tonic synaptic conductance to 5x the leak and forces unphysical leak
+    # reversals (issue #17). Raising it moves release into the sigmoid's
+    # foot, where a resting synapse is quiet and has most of its range
+    # still ahead of it.
+    #
+    # Held at zero because the trade-off was measured and it is a wall, not
+    # a tuning problem. Raising the offset improves every static quantity
+    # monotonically: at 40 mV tonic release falls from 54.5% of maximum to
+    # 0.8%, muscle whole-cell input resistance rises from 0.15 to 0.85 GOhm
+    # against Jospin's measured 1.0, unphysical leak reversals fall from 111
+    # cells to 59, and the ratio of evoked to resting release improves
+    # tenfold. Behaviour does not survive it: at 20 mV the touch response is
+    # already gone (no poke-evoked reversal at all) and crawling drops from
+    # 0.230 to 0.099 mm/s, at 40 mV to 0.066 with 25 cells driven far from
+    # threshold. Everything downstream was calibrated against a network
+    # whose synapses sit half-saturated at rest, so closing issue #17 means
+    # re-deriving the reversal threshold, the junction strength and the gait
+    # constants together, not moving this number.
+    v_th_offset_mv = 0.0
     a_r = (1.0 / 1.5) / 1000.0   # synaptic rise rate, 1/ms  (0.667 s^-1)
     a_d = (5.0 / 1.5) / 1000.0   # synaptic decay rate, 1/ms (3.33 s^-1)
 
@@ -286,6 +311,7 @@ PROVENANCE = {
     "trn_dep_deadband": "tuned",     # several sigma above resting noise
     "trn_dep_onset_ms": "tuned",     # long against one tap, short against ISI
     "beta": "published",    # Kunert et al. 2014
+    "v_th_offset_mv": "tuned",  # issue #17; 0.0 is the published convention
     "a_r": "published",     # Wicks/Kunert, 1.5x time rescale
     "a_d": "published",
     "g_Ca": "tuned",        # intrinsic oscillator: no measured conductance
@@ -315,8 +341,15 @@ class NervousSystem:
         # transmitter-level heuristic as the tagged fallback.
         self.E_syn = conn.E_syn
 
-        half = 0.5 * self.p.a_r
-        self.s_eq = half / (half + self.p.a_d)
+        # Resting release follows the sigmoid's own foot. With the offset
+        # at zero this is phi(rest) = 0.5 and s_eq is the Wicks value; with
+        # the sigmoid moved up, resting release falls with it, and the
+        # threshold solver has to use the SAME number the dynamics will,
+        # or the solved operating point and the real one disagree and
+        # calibrate_rest drives E_leak to extremes chasing the difference.
+        phi_rest = 1.0 / (1.0 + math.exp(self.p.beta * self.p.v_th_offset_mv))
+        self.s_eq = (self.p.a_r * phi_rest) / (self.p.a_r * phi_rest
+                                               + self.p.a_d)
         self.ablated: set[str] = set()
         self._ablated_idx = np.array([], dtype=int)
 
@@ -484,9 +517,10 @@ class NervousSystem:
              + s_eq * (Gs * self.E_syn).sum(axis=1))
 
         try:
-            return np.linalg.solve(A, b)
+            V_op = np.linalg.solve(A, b)
         except np.linalg.LinAlgError:
-            return np.linalg.lstsq(A, b, rcond=None)[0]
+            V_op = np.linalg.lstsq(A, b, rcond=None)[0]
+        return V_op + p.v_th_offset_mv
 
     def calibrate_rest(self, iterations: int = 40) -> None:
         """Set E_leak so measured cells rest where they were measured to rest.
