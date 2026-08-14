@@ -37,7 +37,7 @@ anything.
 
 ```bash
 worm serve            # live browser viewer
-worm validate         # 51 checks against published measurements, in parallel
+worm validate         # 52 checks against published measurements, in parallel
 worm params           # audit every model parameter and its provenance
 worm assay all        # run the standard behavioural assays
 worm gene unc-25      # look up a locus
@@ -101,9 +101,13 @@ at which heading error to the source falls during a run, it goes from
 response. Together they are enough to move a plate: over 24 animals released between
 an attractant and a control spot, wild type finishes on the attractant side
 with an index of +0.50 while `che-1`, which cannot taste salt, does not.
-The absolute index should be read with care, since a salt-blind animal does
-not score exactly zero here (see [issue #20](https://github.com/vdmkenny/celeganssim/issues/20));
-what the check tests is the difference between the two.
+The plate has no handedness of its own: omega turns here are always ventral,
+so each animal is given a side to lie on the way a worm on agar is, and a
+population averages the turn direction out. Without that, every animal curled
+the same way and accumulated 371 degrees of rotation in ten minutes, which an
+assay reads as behaviour. A steady gait curl remains, unrelated to
+orientation, tracked as
+[issue #34](https://github.com/vdmkenny/celeganssim/issues/34).
 
 The search itself has a history: dopamine carries the memory of food. In the
 minutes after leaving a lawn the reversal rate runs at the local-search value,
@@ -300,7 +304,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | `worm/lifecycle.py` | embryo, larval stages, dauer, feeding, ageing, death |
 | `worm/simulation.py` | closed loop, escape-response state machine |
 | `worm/assays.py` | standard assays with reference values |
-| `worm/validate.py` | 51 checks: 33 behavioural, 18 consistency, gaps as expected failures |
+| `worm/validate.py` | 52 checks: 34 behavioural, 18 consistency, gaps as expected failures |
 | `worm/parameters.py` | audited parameter registry, provenance tags enforced by a check |
 | `worm/server.py`, `viewer/` | live browser viewer |
 
@@ -340,7 +344,7 @@ rather than making it, so are not modelled as GABAergic.
 tagged measured, published, tuned or scripted, so the difference between what
 the model knows and what it assumes stays visible.
 
-`worm validate` runs 51 checks against published measurements: 33 behavioural
+`worm validate` runs 52 checks against published measurements: 34 behavioural
 (the animal is run and measured) and 18 consistency checks (parameter and data
 invariants). 41 pass. Ten are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real

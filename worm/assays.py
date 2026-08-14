@@ -145,6 +145,12 @@ def _chemo_run(task):
     ctrl = np.array(CHEMO_CONTROL_XY)
     sim.env.add_source(peak[0], peak[1], kind="salt", strength=1.0,
                        sigma=CHEMO_SOURCE_SIGMA_MM)
+    # Counterbalance which side each animal lies on, rather than leaving it
+    # to each animal's own draw. A real plate averages the ventral-turn
+    # handedness out only because it holds many animals; a dozen seeded
+    # draws can come out 9:3 and leave the plate with a drift no gradient
+    # put there (issue #32). Alternating makes the control variable exact.
+    sim.body_side = 1.0 if (seed % 2 == 0) else -1.0
     sim.reset(x=float(start_xy[0]), y=float(start_xy[1]), heading=heading)
 
     steps = int(minutes * 60.0 / sim.cfg.dt)

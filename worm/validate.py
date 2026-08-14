@@ -1430,6 +1430,49 @@ def _vigor():
     return (h > g > 0.0), f"latched vigor gentle {g:.2f}, harsh {h:.2f}"
 
 
+@check("a plate of animals has no handedness of its own",
+       "omega turns here are always ventral, which is right for one animal "
+       "and wrong for a plate: on agar a worm lies on its left or its "
+       "right, so ventral points a different way in the dish and a "
+       "population averages the handedness out. Without that every animal "
+       "curls the same way and the plate acquires a drift no gradient put "
+       "there, which is exactly what a chemotaxis assay would misread as "
+       "behaviour",
+       "Gray, Hill & Bargmann 2005 PNAS 102:3184 (ventral bias of the omega "
+       "turn); the artefact and its size are measured in issue #32")
+def _plate_handedness():
+    def turn_of(side):
+        """Heading change produced by one omega turn, driven directly.
+
+        Waiting for spontaneous turns costs minutes per animal and buys
+        nothing: the claim is that the TURN reverses with the side the
+        animal lies on, so the turn is driven and measured.
+        """
+        s = _quiet(_sim(seed=0))
+        s.body_side = side
+        for _ in range(500):
+            s.step()
+        n = s.body.world_nodes()
+        a0 = float(np.degrees(np.arctan2(*(n[0] - n[-1])[::-1])))
+        s.state.behavior, s.state.state_time = "omega", 0.0
+        for _ in range(int(s.cfg.omega_s / s.cfg.dt)):
+            s.step()
+        n = s.body.world_nodes()
+        a1 = float(np.degrees(np.arctan2(*(n[0] - n[-1])[::-1])))
+        return (a1 - a0 + 180.0) % 360.0 - 180.0
+
+    right, left = turn_of(1.0), turn_of(-1.0)
+    # Opposite signs, comparable size: a plate holding both lies has no net
+    # handedness. Without this every animal curled the same way and the
+    # plate drifted, which a chemotaxis assay reads as behaviour: measured
+    # at -371 +/- 91 deg of net rotation for a one-sided population against
+    # -47 +/- 128 counterbalanced (issue #32).
+    ok = (right * left < 0 and abs(right) > 20.0 and abs(left) > 20.0
+          and abs(abs(right) - abs(left)) < 0.5 * max(abs(right), abs(left)))
+    return ok, (f"one omega turns {right:+.0f} deg lying one way and "
+                f"{left:+.0f} deg lying the other, so a plate of both "
+                f"has no handedness of its own")
+
 @check("the omega turn reorients as sharply as the real one",
        "post-omega heading change is far larger than a plain reversal exit "
        "(Gray 2005: omega turns sharply redirect the animal, on the order "

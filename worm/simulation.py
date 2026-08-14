@@ -343,6 +343,8 @@ class WormSimulation:
         self.modulation = MonoamineLayer(self.conn, self.genome)
         self.body = Body(BodyParams(), seed=self.cfg.seed)
         self.rng = np.random.default_rng(self.cfg.seed)
+        # Which side this animal lies on: +1 or -1, drawn once per animal.
+        self.body_side = 1.0 if self.rng.random() < 0.5 else -1.0
         from .lifecycle import Lifecycle
         self.life = Lifecycle(seed=self.cfg.seed)
         if self.cfg.start_adult:
@@ -1106,6 +1108,16 @@ class WormSimulation:
     def _head_bias(self, act: np.ndarray, turn_cmd: float) -> float:
         """Dorsoventral bias of the head, i.e. steering.
 
+        The result is multiplied by which side the animal is lying on. Omega
+        turns here are always ventral, which is right for one animal and
+        wrong for a plate: on agar the worm lies on its left or its right,
+        so the ventral direction points a different way in the dish, and a
+        population averages the handedness out. Without that, every animal
+        curls the same way and the plate acquires a drift no gradient put
+        there. Measured: with no attractant at all, 24 animals scored -0.25
+        on the plate index, which is exactly what the salt-blind control
+        scored in a gradient (issue #32).
+
         Baseline steering is the SMD/RMD dorsal-vs-ventral imbalance, which is
         the klinotaxis (weathervane) pathway. During an omega turn this is
         overridden with a large ventral bias, matching the observed ventral
@@ -1113,15 +1125,16 @@ class WormSimulation:
         """
         if self.state.behavior == "omega":
             strength = OMEGA_HEAD_BIAS * self.genome.global_scale("omega_turn")
-            return -float(np.clip(strength, 0.0, 1.0))
+            return -float(np.clip(strength, 0.0, 1.0)) * self.body_side
         d = float(np.mean(act[self.i_hd])) if len(self.i_hd) else 0.5
         v = float(np.mean(act[self.i_hv])) if len(self.i_hv) else 0.5
         bias = np.clip((d - v) * 6.0, -0.45, 0.45)
+        bias *= self.body_side
         if KLINOTAXIS_GAIN and self.state.behavior == "forward":
             steer = (KLINOTAXIS_GAIN * self._klinotaxis_corr
                      * self.sensory._gain("salt_on"))
             bias += float(np.clip(steer, -KLINOTAXIS_MAX_BIAS,
-                                  KLINOTAXIS_MAX_BIAS))
+                                  KLINOTAXIS_MAX_BIAS)) * self.body_side
         # RIM tyramine suppresses head movement during reversals; tdc-1 removes it.
         if self.state.behavior == "reversal":
             bias *= self.genome.global_scale("head_suppression")
