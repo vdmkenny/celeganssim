@@ -98,9 +98,10 @@ Both halves of the mechanism are now present. Klinokinesis modulates the
 pirouette rate, and klinotaxis curves the forward runs: measured as the rate
 at which heading error to the source falls during a run, it goes from
 -0.02 deg/s with the steering off to -0.65 deg/s with it on, a clean dose
-response. Together they are enough to move a plate: over 24 animals released between
-an attractant and a control spot, wild type finishes on the attractant side
-with an index of +0.50 while `che-1`, which cannot taste salt, does not.
+response. Together they are enough to move a plate: released midway between an
+attractant and a control spot, wild type finishes on the attractant side
+with an index of +0.50 while `che-1`, which cannot taste salt, ends up at
+-0.83, the wrong side of a plate it cannot navigate.
 The plate has no handedness of its own: omega turns here are always ventral,
 so each animal is given a side to lie on the way a worm on agar is, and a
 population averages the turn direction out. Without that, every animal curled
@@ -373,7 +374,7 @@ activation also leads curvature by 8 degrees where the animal holds about 45.
 | Omega turn reorientation | 133 degrees | about 140 |
 | Spontaneous reversals off food | 2.3 /min | ~2 /min, on food lower, `goa-1` higher |
 | Basal slowing on food | 13.9% (`cat-2` 0.1%, `tph-1` 16.1%) | slowing present, abolished without dopamine |
-| Chemotaxis index, salt | +0.50 over 24 animals (`che-1` -0.25) | positive for wild type, absent without ASE |
+| Chemotaxis index, salt | +0.50 (`che-1` -0.83) | positive for wild type, absent without ASE |
 | Local search vs dispersal | 1.8 vs 0.8 /min, `cat-2` stays at 0.4 | several-fold decay over ~30 min, dopamine-dependent |
 | Embryogenesis | 14.2 h | 14.2 h |
 | Hatch to adult | 50.8 h | 50.67 +/- 1.95 h |
