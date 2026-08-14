@@ -87,3 +87,45 @@ The audit gives a hierarchy, applied when a claim needs a source:
 `worm/parameters.py` enforces that anything tagged `measured` or `published`
 carries a citation. This audit checks that those citations still say what they
 said when they were written.
+
+---
+
+# What the functional atlas says about wiring
+
+Not a citation matter, but it belongs next to the source audit, because it
+bounds what any connectome-based model can claim.
+
+Randi et al. 2023 (Nature 623:406) measured functional influence directly:
+stimulate one neuron optogenetically, record the whole brain, repeat. The
+atlas ships inside `wormneuroatlas`, and `scripts/functional_atlas.py`
+compares it against the wiring this model runs on.
+
+Among the 22,107 measured pairs where both cells exist in our connectome:
+
+| relationship | pairs |
+|---|---|
+| wired and functionally significant | 231 |
+| wired but functionally silent | 1,765 |
+| functionally significant with no direct edge | 858 |
+| neither | 19,253 |
+
+Two numbers worth keeping in mind whenever this model claims something:
+
+**Only 12% of wired pairs carry measurable influence.** An anatomical edge
+is not a functional one. A model that treats every edge as a live channel is
+over-connected relative to the animal, which is one plausible reason our
+network sits compressed around 0.5 with everything shunting everything else
+(issue #17).
+
+**79% of functional pairs have no direct edge.** Most influence is indirect,
+and the honest comparison is against the model's PROPAGATION rather than its
+adjacency, which is what issue #29 proposes and what would turn this into a
+real check. Our extrasynaptic layers account for 15% of them, so volume
+transmission is part of the answer but not most of it; the rest should be
+polysynaptic, and whether it actually is in our model is exactly the open
+question.
+
+The `unc-31` arm is a useful control. With dense-core vesicle release gone,
+the share of wired pairs carrying influence drops from 12% to 6%, and the
+share of functional pairs lacking a direct edge rises from 79% to 85%. Both
+move the way peptidergic signalling being removed should move them.
