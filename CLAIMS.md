@@ -20,6 +20,10 @@ what the model knows and what it assumes.
 | Motor neurons rest at their measured potentials; muscle at -25 mV | measured (Liu, Chen & Wang 2014; Gao & Zhen 2011) | check "cells rest where they were measured to rest" |
 | Synapse signs from postsynaptic receptor expression | measured expression (CeNGEN), derivation modelled; behavioural overrides counted separately | check "receptor-derived signs match documented synapses" |
 
+| Cells differ in the ion channels they express | measured (CeNGEN): 35 channels across six families, 3 to 20 per cell, sparsest and richest share 10% | check "measured channel expression differentiates the cells". Data only: conductances are NOT yet derived from it (issue #28) |
+| Connections roughly triple from L1 to adult | measured (Witvliet et al. 2021): eight reconstructions, 2.3x more edges against 1.13x more cells | check "the connectome grows across development". Data only; the datasets are the anterior nervous system and lack the ventral cord entirely (issue #27) |
+| What the wiring does NOT tell us | measured (Randi et al. 2023): only 12% of wired pairs carry measurable influence, and 79% of functional pairs have no direct edge | `scripts/functional_atlas.py`, docs/citations.md. A bound on every claim in this table that rests on adjacency |
+
 ## Muscle and junction
 
 | Claim | Basis | Evidence |
