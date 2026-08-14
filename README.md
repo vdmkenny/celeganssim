@@ -87,18 +87,20 @@ pirouette rate is multiplied down when the animal climbs a salt gradient and
 up when it descends, with the measured 3x asymmetry (Pierce-Shimomura et al.
 1999) and an ASE-style seconds-scale integration of dC/dt, gated by the real
 ASE genome gains so `che-1` and `tax-4` silence it by mechanism. Honest
-accounting: an earlier chemotaxis-index pass turned out to be an arena
-artifact (on a small toroidal plate the scoring band covered 30% of the
-surface, and a blind walker scored 0.6-0.7 by wrapping through it). On the
-corrected open-field assay the biased walk is not yet strong enough to
-out-drift a blind animal, because pirouettes that reorient only ~26 degrees
-cannot re-randomize the walk. With the omega turn fixed that half now
-works, and the wild type out-drifts a blind animal by 7 mm over six
-minutes, but both still drift outward: an unbiased walker released on a
-ring moves away by plain 2D geometry, and pirouette-rate modulation alone
-cannot overcome it. The missing half is klinotaxis, the weathervane
-curving of forward runs (Iino & Yoshida 2009), a tracked expected
-failure.
+accounting. An earlier chemotaxis-index pass turned out to be an arena
+artifact: on a small toroidal plate the scoring band covered 30% of the
+surface, so a salt-blind animal scored 0.6-0.7 by wrapping through it. The
+assay now uses Ward's geometry instead, an attractant spot and a control
+spot with the animals released between them, where an animal that cannot
+smell scores zero by symmetry rather than by the arena being the right size.
+
+Both halves of the mechanism are now present. Klinokinesis modulates the
+pirouette rate, and klinotaxis curves the forward runs: measured as the rate
+at which heading error to the source falls during a run, it goes from
+-0.02 deg/s with the steering off to -0.65 deg/s with it on, a clean dose
+response. Whether that is enough for the animal to accumulate at the
+attractant spot the way a plate of real animals does is a separate question
+and a tracked expected failure.
 
 The search itself has a history: dopamine carries the memory of food. In the
 minutes after leaving a lawn the reversal rate runs at the local-search value,
@@ -152,7 +154,7 @@ in:
 |---|---|---|
 | `mec-4` | the six touch receptor neurons | gentle touch abolished, harsh touch intact |
 | `unc-25` | 28 cells: DD, VD, RME, AVL, DVB, RIS, RIB | GABA lost, animal hypercontracts |
-| `che-1` | ASEL, ASER | salt chemotaxis lost, odour intact |
+| `che-1` | ASEL, ASER | salt sensing lost, odour intact |
 | `cat-2` | the eight dopaminergic neurons | no dopamine: basal slowing and area-restricted search both lost |
 | `daf-2` | 158 cells | lifespan roughly doubles, requires `daf-16` |
 
@@ -313,6 +315,8 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 | Cell classification | WormAtlas | lineage and anatomical class |
 | Receptor pharmacology | derived from RefSeq product descriptions | 72 ligand-gated receptors with ion selectivity |
 | Monoamine connectome | Bentley et al. 2016, via OpenWorm ConnectomeToolbox | 2,626 extrasynaptic edges naming ligand and receptor |
+| Neuropeptide connectome | Bentley et al. 2016, via OpenWorm ConnectomeToolbox | 8,931 extrasynaptic edges, 15 ligands, 12 receptors (data only, issue #13) |
+| Functional atlas | Randi et al. 2023, bundled with wormneuroatlas | measured signal propagation between 300 neurons, used to bound what the wiring predicts ([docs/citations.md](docs/citations.md)) |
 
 Sources are audited for peer review and corrections by
 `scripts/audit_citations.py`, with the findings in
@@ -340,9 +344,13 @@ gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
 ([issue #10](https://github.com/vdmkenny/celeganssim/issues/10)). The animal
-now reverses spontaneously at the measured rates and chemotaxes by biased
-random walk, but `goa-1` still loses to its constant reversing the speed its
-deeper, faster bends would otherwise gain, an oscillator-depth gap owned by
+reverses spontaneously at the measured rates, searches locally after leaving
+food and turns with real 133-degree omega turns, but it does not yet
+chemotax: on honest plate geometry the biased walk cannot out-drift a
+salt-blind animal, which is an expected failure owned by
+[issue #20](https://github.com/vdmkenny/celeganssim/issues/20). `goa-1` also
+still loses to its constant reversing the speed its deeper, faster bends
+would otherwise gain, an oscillator-depth gap owned by
 [issue #10](https://github.com/vdmkenny/celeganssim/issues/10). Muscle
 activation also leads curvature by 8 degrees where the animal holds about 45.
 
@@ -352,8 +360,10 @@ activation also leads curvature by 8 degrees where the animal holds about 45.
 | Membrane time constant | 6.0 ms | 3 to 10 ms |
 | AVAL-AVAR gap coupling | 54 pS | 56 pS |
 | VA5 / VB6 resting potential | -71.7 / -53.2 mV | -71.7 / -53.2 mV |
-| Crawling speed | 0.239 mm/s | 0.20 +/- 0.04 mm/s |
-| Undulation amplitude | 21.2% body length | 19.3% |
+| Crawling speed | 0.204 mm/s | 0.20 +/- 0.04 mm/s |
+| Undulation amplitude | 17.9% body length | 19.3% |
+| Undulation frequency | 0.468 Hz | 0.47 Hz commanded, recovered from the body |
+| Omega turn reorientation | 133 degrees | about 140 |
 | Spontaneous reversals off food | 2.3 /min | ~2 /min, on food lower, `goa-1` higher |
 | Basal slowing on food | 13.9% (`cat-2` 0.1%, `tph-1` 16.1%) | slowing present, abolished without dopamine |
 | Local search vs dispersal | 1.8 vs 0.8 /min, `cat-2` stays at 0.4 | several-fold decay over ~30 min, dopamine-dependent |
