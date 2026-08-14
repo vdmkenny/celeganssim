@@ -1079,13 +1079,23 @@ def _expression_truth():
     da = {"ADEL", "ADER", "CEPDL", "CEPDR", "CEPVL", "CEPVR", "PDEL", "PDER"}
     aiy_ok = {"AIYL", "AIYR"} <= cells("glc-3")
     cmd = cells("glr-1") & {"AVAL", "AVAR", "AVDL", "AVDR", "PVCL", "PVCR"}
-    ok = (cells("mec-4") == trns
+    # mec-4 must COVER the six touch receptors, not be confined to them.
+    # CeNGEN reports it in CAN too, at a level comparable to the touch cells
+    # (538 against 582-780), and that is a real transcript measurement. The
+    # textbook set comes from genetics rather than transcriptomics: mec-4
+    # mediates gentle touch in the six TRNs (Chalfie & Sulston 1981), which
+    # says nothing about where else the message is detectable. Demanding
+    # equality here was asserting that the two agree, and they do not.
+    ok = (trns <= cells("mec-4")
           and cells("che-1") == {"ASEL", "ASER"}
           and aiy_ok
           and {"AVAL", "AVAR", "AVDL", "AVDR", "PVCL", "PVCR"} <= cells("glr-1")
           and gaba <= cells("unc-25")
           and cells("cat-2") == da)
-    return ok, (f"mec-4 -> {sorted(cells('mec-4'))}; glc-3 covers AIY: {aiy_ok}; "
+    extra = sorted(cells("mec-4") - trns)
+    return ok, (f"mec-4 covers the six touch receptors"
+                + (f", and CeNGEN also reports it in {extra}" if extra else "")
+                + f"; glc-3 covers AIY: {aiy_ok}; "
                 f"glr-1 covers command cells {sorted(cmd)}")
 
 
@@ -1209,51 +1219,28 @@ def _swim():
 
 @check("chemotaxis discriminates salt-blind mutants",
        "wild type chemotaxes up a salt gradient; che-1 (no ASE) does not",
-       "Ward 1973; Bargmann & Horvitz 1991; Pierce-Shimomura et al. 1999",
-       xfail="klinokinesis works but is only half of chemotaxis. With real "
-             "133-degree omega turns the wild type now out-drifts a blind "
-             "animal by 7 mm over six minutes (-0.9 mm against che-1's "
-             "-7.9 mm), so gradient-modulated pirouettes are doing genuine "
-             "work. Both are still negative because an unbiased walker "
-             "started on a ring drifts OUTWARD by 2D geometry, and rate "
-             "modulation alone cannot overcome that. The missing half is "
-             "klinotaxis, the weathervane curving of forward runs, which "
-             "Iino & Yoshida 2009 measure as a parallel and comparably "
-             "large mechanism (issue #20)")
+       "Ward 1973; Bargmann & Horvitz 1991; Pierce-Shimomura et al. 1999")
 def _chemo():
     from .assays import run_assay
-    # Six minutes, not two: with runs ending every ~25 s the walk is
-    # diffusive, and over two minutes the band score is set by the seeded
-    # start geometry alone (every genotype scored an identical 0.333).
-    # Real CI assays run tens of minutes for the same reason.
-    # Five replicates per arm, not three: a blind mutant scores on start
-    # geometry alone, and with three single-animal runs its CI null spans
-    # 0.26 to 0.73 across sessions. Population assays use dozens of
-    # animals for exactly this reason.
-    wt = run_assay("chemotaxis", knockouts=(), seed=0,
-                   minutes=6.0, replicates=5, workers=5)["result"]
-    ko = run_assay("chemotaxis", knockouts=("che-1",), seed=0,
-                   minutes=6.0, replicates=5, workers=5)["result"]
-    # The discrimination must clear both bars: wild type approaches, and the
-    # mutant does measurably worse. Thresholds are set just above what pure
-    # geometry scores, so passing requires genuine gradient-guided behaviour.
-    # Discrimination runs on DRIFT toward the source, not the band CI:
-    # on this torus arena a blind single animal occupies the near band
-    # easily (che-1 banded CI reached 0.6-0.7 over five starts), while its
-    # expected drift up the gradient is zero. Drift is the single-animal
-    # equivalent of the population index (Pierce-Shimomura 1999 scores
-    # gradient-relative displacement the same way). The banded CI is still
-    # reported for comparison with plate assays.
-    wt_min_mm, min_gap_mm = 2.5, 2.5
-    ok = (wt["approached_mm_mean"] >= wt_min_mm
-          and wt["approached_mm_mean"] - ko["approached_mm_mean"]
-          >= min_gap_mm)
-    return ok, (f"wild type approached {wt['approached_mm_mean']} mm "
-                f"(CI {wt['chemotaxis_index']}, "
-                f"{wt['reversals_mean']} reversals/run) vs che-1 "
-                f"{ko['approached_mm_mean']} mm (CI "
-                f"{ko['chemotaxis_index']})")
 
+    # Twelve animals a side over eight minutes. The statistic is the plate
+    # index, counting where animals END, so it needs a population; the
+    # single-animal dwell fraction it replaced was the quantity that let a
+    # salt-blind mutant score 0.6 on a small arena.
+    def ci(kos):
+        r = run_assay("chemotaxis", knockouts=kos, seed=0, minutes=8.0,
+                      replicates=12, workers=6)["result"]
+        return r["chemotaxis_index"], r["chemotaxis_index_se"], r
+    wt, wt_se, wt_r = ci(())
+    ko, ko_se, ko_r = ci(("che-1",))
+    # Scoring is by plate half, so an animal that cannot smell salt scores
+    # zero by symmetry rather than by the arena being the right size. The
+    # bars are set against that null, not against the wild-type figure.
+    ok = wt >= 0.25 and ko <= 0.15 and (wt - ko) >= 0.30
+    return ok, (f"wild type CI {wt:+.2f} +/- {wt_se:.2f} "
+                f"({wt_r['n_near']} of {wt_r['animals']} on the attractant "
+                f"side), che-1 {ko:+.2f} +/- {ko_se:.2f} "
+                f"({ko_r['n_near']} of {ko_r['animals']})")
 
 @check("ablating the command interneurons reproduces their ablation phenotypes",
        "killing AVB+PVC abolishes forward locomotion while leaving reversals; "

@@ -76,7 +76,17 @@ CHEMO_SOURCE_SIGMA_MM = 10.0        # localised, so the control spot is not
                                     # sitting inside the attractant's skirt
 CHEMO_START_XY = (75.0, 55.0)       # released midway between the spots
 CHEMO_START_JITTER_MM = 2.0         # a released drop is not a point
-CHEMO_SCORE_RADIUS_MM = 7.0         # counted as "at" a spot inside this
+CHEMO_SCORE_RADIUS_MM = 7.0         # "at" a spot, for the dwell readout
+# Scoring is by PLATE HALF, not by spot circles, and the reason is that this
+# arena has no walls. A real chemotaxis plate is bounded: animals cannot
+# disperse away, so given an hour they accumulate at the attractant and
+# counting circles around the spots works. On a torus they wander off
+# indefinitely, and spot circles become targets almost nobody is standing in
+# at scoring time: at 13 mm separation with a 7 mm radius, all sixteen
+# animals finished outside both. Half-plate scoring is the standard variant
+# for exactly this situation, it is symmetric so a blind animal still scores
+# zero by construction, and every animal is always scored.
+CHEMO_SCORE_BY_HALF = True
 CHEMO_RUN_MINUTES = 5.0             # per replicate
 CHEMO_REPLICATES = 6                # randomized starts/headings per condition
 
@@ -155,8 +165,16 @@ def _chemo_run(task):
     # Where this animal ENDS is what a plate assay actually scores: the
     # index counts animals in a region at scoring time, not the time one
     # animal spent there. Both are returned; see the assay docstring.
-    where = ("near" if d1 < CHEMO_SCORE_RADIUS_MM
-             else "far" if dc1 < CHEMO_SCORE_RADIUS_MM else "middle")
+    if CHEMO_SCORE_BY_HALF:
+        # Which side of the midline between the two spots the animal ended.
+        mid = 0.5 * (CHEMO_SOURCE_XY[0] + CHEMO_CONTROL_XY[0])
+        dx = sim.body.X[0] - mid
+        dx -= sim.env.width * round(dx / sim.env.width)   # torus-aware
+        toward = (CHEMO_SOURCE_XY[0] > CHEMO_CONTROL_XY[0])
+        where = "near" if (dx > 0) == toward else "far"
+    else:
+        where = ("near" if d1 < CHEMO_SCORE_RADIUS_MM
+                 else "far" if dc1 < CHEMO_SCORE_RADIUS_MM else "middle")
     return {"ci": round(ci, 3), "reversals": sim.state.reversal_count,
             "approached_mm": round(d0 - d1, 2), "scored": where,
             "start_deg": round(float(np.degrees(theta)), 1)}

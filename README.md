@@ -98,9 +98,12 @@ Both halves of the mechanism are now present. Klinokinesis modulates the
 pirouette rate, and klinotaxis curves the forward runs: measured as the rate
 at which heading error to the source falls during a run, it goes from
 -0.02 deg/s with the steering off to -0.65 deg/s with it on, a clean dose
-response. Whether that is enough for the animal to accumulate at the
-attractant spot the way a plate of real animals does is a separate question
-and a tracked expected failure.
+response. Together they are enough to move a plate: over 24 animals released between
+an attractant and a control spot, wild type finishes on the attractant side
+with an index of +0.50 while `che-1`, which cannot taste salt, does not.
+The absolute index should be read with care, since a salt-blind animal does
+not score exactly zero here (see [issue #20](https://github.com/vdmkenny/celeganssim/issues/20));
+what the check tests is the difference between the two.
 
 The search itself has a history: dopamine carries the memory of food. In the
 minutes after leaving a lawn the reversal rate runs at the local-search value,
@@ -339,7 +342,7 @@ the model knows and what it assumes stays visible.
 
 `worm validate` runs 51 checks against published measurements: 33 behavioural
 (the animal is run and measured) and 18 consistency checks (parameter and data
-invariants). 40 pass. Eleven are registered expected failures, each naming the
+invariants). 41 pass. Ten are registered expected failures, each naming the
 gap it tracks. The connectome does not generate the locomotor rhythm, so real
 muscle drive carries no undulation, and the fixed-frequency oscillator cannot
 adapt gait to the medium
@@ -366,6 +369,7 @@ activation also leads curvature by 8 degrees where the animal holds about 45.
 | Omega turn reorientation | 133 degrees | about 140 |
 | Spontaneous reversals off food | 2.3 /min | ~2 /min, on food lower, `goa-1` higher |
 | Basal slowing on food | 13.9% (`cat-2` 0.1%, `tph-1` 16.1%) | slowing present, abolished without dopamine |
+| Chemotaxis index, salt | +0.50 over 24 animals (`che-1` -0.25) | positive for wild type, absent without ASE |
 | Local search vs dispersal | 1.8 vs 0.8 /min, `cat-2` stays at 0.4 | several-fold decay over ~30 min, dopamine-dependent |
 | Embryogenesis | 14.2 h | 14.2 h |
 | Hatch to adult | 50.8 h | 50.67 +/- 1.95 h |
