@@ -343,8 +343,19 @@ class WormSimulation:
         self.modulation = MonoamineLayer(self.conn, self.genome)
         self.body = Body(BodyParams(), seed=self.cfg.seed)
         self.rng = np.random.default_rng(self.cfg.seed)
-        # Which side this animal lies on: +1 or -1, drawn once per animal.
-        self.body_side = 1.0 if self.rng.random() < 0.5 else -1.0
+        # Which side this animal lies on, +1 or -1. On agar a worm lies on
+        # its left or its right, so the ventral direction points a different
+        # way in the dish and the always-ventral omega turn curls it the
+        # other way; a population averages that out, and without it every
+        # animal curls alike and the plate drifts (issue #32).
+        #
+        # Alternating by seed rather than drawing randomly, for two reasons.
+        # A draw has to come from somewhere, and taking it from self.rng
+        # shifts every random number after it, which silently moved noise
+        # and spontaneous-event timing in every simulation. And a small
+        # sample of independent draws is not balanced: eight seeds came out
+        # seven to one, which is exactly the drift this is meant to remove.
+        self.body_side = 1.0 if self.cfg.seed % 2 == 0 else -1.0
         from .lifecycle import Lifecycle
         self.life = Lifecycle(seed=self.cfg.seed)
         if self.cfg.start_adult:
