@@ -76,6 +76,36 @@ FILES: list[tuple[str, str, str, bool]] = [
      "Bentley et al. 2016 neuropeptide edges, same four columns. Fetched "
      "and pinned but NOT yet built: the dense peptidergic layer is the "
      "second half of issue #13", False),
+    # Witvliet et al. 2021 reconstructed the connectome at eight points across
+    # development, four L1 through two adults, and this project is the only
+    # one with a life cycle to hang them on. Single-animal reconstructions of
+    # the anterior nervous system, so the four L1 datasets are individuals and
+    # their spread is the natural error bar rather than noise to average away.
+    # Same schema as Cook 2020 (pre, post, type, synapses), issue #27.
+    ("witvliet_2020_1_L1.xlsx",
+     f"{CTB}/witvliet_2020_1%20L1.xlsx",
+     "Witvliet et al. 2021 developmental connectome, dataset 1 (L1)", False),
+    ("witvliet_2020_2_L1.xlsx",
+     f"{CTB}/witvliet_2020_2%20L1.xlsx",
+     "Witvliet et al. 2021 developmental connectome, dataset 2 (L1)", False),
+    ("witvliet_2020_3_L1.xlsx",
+     f"{CTB}/witvliet_2020_3%20L1.xlsx",
+     "Witvliet et al. 2021 developmental connectome, dataset 3 (L1)", False),
+    ("witvliet_2020_4_L1.xlsx",
+     f"{CTB}/witvliet_2020_4%20L1.xlsx",
+     "Witvliet et al. 2021 developmental connectome, dataset 4 (L1)", False),
+    ("witvliet_2020_5_L2.xlsx",
+     f"{CTB}/witvliet_2020_5%20L2.xlsx",
+     "Witvliet et al. 2021 developmental connectome, dataset 5 (L2)", False),
+    ("witvliet_2020_6_L3.xlsx",
+     f"{CTB}/witvliet_2020_6%20L3.xlsx",
+     "Witvliet et al. 2021 developmental connectome, dataset 6 (L3)", False),
+    ("witvliet_2020_7_adult.xlsx",
+     f"{CTB}/witvliet_2020_7%20adult.xlsx",
+     "Witvliet et al. 2021 developmental connectome, dataset 7 (adult)", False),
+    ("witvliet_2020_8_adult.xlsx",
+     f"{CTB}/witvliet_2020_8%20adult.xlsx",
+     "Witvliet et al. 2021 developmental connectome, dataset 8 (adult)", False),
     ("owmeta_cache.json",
      f"{C302}/owmeta_cache.json",
      "OpenWorm owmeta neuron and muscle metadata", False),
@@ -90,6 +120,22 @@ FILES: list[tuple[str, str, str, bool]] = [
 # build: either upstream changed (investigate, then update the pin alongside
 # whatever recalibration the new data needs) or the download is corrupt.
 PINNED_SHA256: dict[str, str] = {
+    "witvliet_2020_1_L1.xlsx":
+        "e988deaa25d290786434a23131c1bf3f144e3ca07980233a6edbfcfb8d4d30be",
+    "witvliet_2020_2_L1.xlsx":
+        "b365bdd96dea52c261c748232dd5d333671721865be1282f3b7efa806d010e2a",
+    "witvliet_2020_3_L1.xlsx":
+        "d94d522af2a64177ebef0dea0951b2a252eb973bbed01a85a19aaafe4ff0244b",
+    "witvliet_2020_4_L1.xlsx":
+        "10f16bd1f122288e9111acabccbf3fbd4811b861ce6e3293600d4eb5e42e4fbe",
+    "witvliet_2020_5_L2.xlsx":
+        "011ebda64c379fa066254ddd5c8ff0ab89621e1e85e8d31ffc0b37b9602fc163",
+    "witvliet_2020_6_L3.xlsx":
+        "9b342751812bf42733ae7c0de8b40f41ea0af0c5c560215d59525631b220b177",
+    "witvliet_2020_7_adult.xlsx":
+        "d0fd2dd32adbe5f04ce90a2e5b74c01c9a831876527b0a2b8bd5b94edc86b037",
+    "witvliet_2020_8_adult.xlsx":
+        "fdead89606257c1b26e57069fbe1de14c7696633b75b59b79e74c0bcc3497e62",
     "edgelist_MA.csv":
         "5a206a6743479f4ae11eb82456378051c5d9aeb56ea5c1f82b121671c7fa2aa3",
     "edgelist_NP.csv":

@@ -939,6 +939,41 @@ def _peptide_layer():
                 f"default, see MonoamineLayer")
 
 
+@check("the connectome grows across development, as reconstructed",
+       "the animal is not born with an adult nervous system: Witvliet's "
+       "series should show connections roughly tripling from L1 to adult "
+       "while cell count rises much less, since most of the change is new "
+       "connections between cells that already exist. The four L1 datasets "
+       "are separate individuals, so their spread is the error bar on "
+       "'the L1 connectome' and must be reported rather than averaged away",
+       "Witvliet et al. 2021 Nature 596:257",
+       section="consistency")
+def _developmental():
+    import json
+    from .paths import data_dir
+    d = json.loads((data_dir() / "developmental.json").read_text())["datasets"]
+    by_stage = {}
+    for x in d:
+        by_stage.setdefault(x["stage"], []).append(x)
+    l1 = by_stage.get("L1", [])
+    adult = by_stage.get("adult", [])
+    if not l1 or not adult:
+        return False, "developmental datasets missing"
+    l1_e = [x["n_edges"] for x in l1]
+    ad_e = [x["n_edges"] for x in adult]
+    growth = (sum(ad_e) / len(ad_e)) / (sum(l1_e) / len(l1_e))
+    cell_growth = ((sum(x["n_cells"] for x in adult) / len(adult))
+                   / (sum(x["n_cells"] for x in l1) / len(l1)))
+    spread = (max(l1_e) - min(l1_e)) / (sum(l1_e) / len(l1))
+    ok = (len(d) == 8 and len(l1) == 4 and 1.8 <= growth <= 3.5
+          and cell_growth < 1.3 and all(x["n_gap"] > 0 for x in d))
+    return ok, (f"{len(d)} reconstructions: L1 {min(l1_e)}-{max(l1_e)} edges "
+                f"across {len(l1)} individuals ({spread:.0%} spread), adult "
+                f"{min(ad_e)}-{max(ad_e)}; connections grow {growth:.1f}x "
+                f"while cells grow only {cell_growth:.2f}x, so development "
+                f"is mostly new wiring between existing cells")
+
+
 @check("measured channel expression differentiates the cells",
        "neurons are not interchangeable passive spheres: the ion channels "
        "they express differ cell by cell, and CeNGEN measures it. The "

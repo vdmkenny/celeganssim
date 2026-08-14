@@ -60,13 +60,23 @@ def _torus_dist(a: np.ndarray, b: np.ndarray, width: float, height: float) -> fl
 # an animal with no chemosensation scores zero by construction rather than
 # by the arena happening to be the right size.
 CHEMO_ARENA = (150.0, 110.0)
-CHEMO_SPOT_DX_MM = 25.0             # attractant at +dx, control at -dx
-CHEMO_SOURCE_XY = (75.0 + 25.0, 55.0)
-CHEMO_CONTROL_XY = (75.0 - 25.0, 55.0)
-CHEMO_SOURCE_SIGMA_MM = 20.0        # Gaussian spread of the salt source
+# Distances are SCALED DOWN from a real plate, and the reason is simulation
+# time rather than biology. Ward's plate puts the spots about 40 mm apart
+# and scores after an hour; the animal here crawls at the measured speed, so
+# an hour of assay is an hour of compute per animal and a plate of sixteen
+# is a day. At 25 mm apart over eight minutes, fourteen of sixteen animals
+# were still in the middle at scoring time and the index was pure noise.
+# Halving the separation and sharpening the gradient keeps the structure
+# that matters, two symmetric spots with the animals released between them,
+# at a scale the walk can actually resolve.
+CHEMO_SPOT_DX_MM = 13.0             # attractant at +dx, control at -dx
+CHEMO_SOURCE_XY = (75.0 + 13.0, 55.0)
+CHEMO_CONTROL_XY = (75.0 - 13.0, 55.0)
+CHEMO_SOURCE_SIGMA_MM = 10.0        # localised, so the control spot is not
+                                    # sitting inside the attractant's skirt
 CHEMO_START_XY = (75.0, 55.0)       # released midway between the spots
-CHEMO_START_JITTER_MM = 3.0         # a released drop is not a point
-CHEMO_SCORE_RADIUS_MM = 12.0        # counted as "at" a spot inside this
+CHEMO_START_JITTER_MM = 2.0         # a released drop is not a point
+CHEMO_SCORE_RADIUS_MM = 7.0         # counted as "at" a spot inside this
 CHEMO_RUN_MINUTES = 5.0             # per replicate
 CHEMO_REPLICATES = 6                # randomized starts/headings per condition
 

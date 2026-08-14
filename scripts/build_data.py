@@ -504,6 +504,53 @@ def build_peptides() -> dict:
             "source": "Bentley et al. 2016 PLoS Comput Biol 12:e1005283"}
 
 
+# Witvliet et al. 2021 Nature 596:257, eight reconstructions across
+# development. The stage is in the filename; the four L1 datasets are
+# separate individuals, so keeping them separate rather than merged is the
+# point (their spread is how much of "the L1 connectome" is individual
+# variation). Issue #27.
+WITVLIET = [("1", "L1"), ("2", "L1"), ("3", "L1"), ("4", "L1"),
+            ("5", "L2"), ("6", "L3"), ("7", "adult"), ("8", "adult")]
+
+
+def build_developmental() -> dict:
+    """Per-stage connectomes, as edge lists in the Cook 2020 shape."""
+    from xlsx import read_sheet, sheet_names
+
+    out = []
+    for num, stage in WITVLIET:
+        path = RAW / f"witvliet_2020_{num}_{stage}.xlsx"
+        if not path.exists():
+            continue
+        rows = read_sheet(path, sheet_names(path)[0])
+        header = [str(c).strip().lower() for c in rows[0]]
+        i_pre, i_post = header.index("pre"), header.index("post")
+        i_type, i_w = header.index("type"), header.index("synapses")
+        edges, cells = [], set()
+        for r in rows[1:]:
+            if len(r) <= i_w or not r[i_pre] or not r[i_post]:
+                continue
+            pre, post = str(r[i_pre]).strip(), str(r[i_post]).strip()
+            kind = "gap" if str(r[i_type]).strip().lower().startswith("elec") \
+                else "chem"
+            try:
+                w = float(r[i_w])
+            except (TypeError, ValueError):
+                continue
+            edges.append([pre, post, kind, w])
+            cells.update((pre, post))
+        out.append({"dataset": num, "stage": stage, "cells": sorted(cells),
+                    "n_cells": len(cells), "n_edges": len(edges),
+                    "n_chem": sum(1 for e in edges if e[2] == "chem"),
+                    "n_gap": sum(1 for e in edges if e[2] == "gap"),
+                    "edges": edges})
+    return {"source": "Witvliet et al. 2021 Nature 596:257 via OpenWorm "
+                      "ConnectomeToolbox",
+            "note": "single-animal reconstructions of the anterior nervous "
+                    "system; the four L1 datasets are individuals",
+            "datasets": out}
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     owmeta = json.loads((RAW / "owmeta_cache.json").read_text())
@@ -528,6 +575,11 @@ def main() -> None:
     connectome, cellinfo = build_connectome(neuron_info, muscle_info)
     (OUT / "connectome.json").write_text(json.dumps(connectome))
     (OUT / "cells.json").write_text(json.dumps(cellinfo, indent=1))
+    dev = build_developmental()
+    (OUT / "developmental.json").write_text(json.dumps(dev))
+    print("  developmental.json: " + ", ".join(
+        f"{d['stage']}#{d['dataset']} {d['n_edges']}e/{d['n_cells']}c"
+        for d in dev["datasets"]))
     pep = build_peptides()
     (OUT / "peptides.json").write_text(json.dumps(pep))
     print(f"  peptides.json: {len(pep['edges'])} edges, "

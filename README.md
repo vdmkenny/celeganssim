@@ -307,6 +307,7 @@ waveform, reproducing a 45.6 mV spike of 18.7 ms half-width against a measured
 |---|---|---|
 | Genome annotation | NCBI RefSeq GCF_000002985.6 (WBcel235) | 46,926 genes, 19,983 protein-coding |
 | Connectome | Cook et al., corrected July 2020 release, via OpenWorm ConnectomeToolbox | 473 cells, 7,762 edges (302 neurons, 95 body-wall muscles) |
+| Developmental connectomes | Witvliet et al. 2021, via OpenWorm ConnectomeToolbox | 8 reconstructions, L1 to adult, 858 to 2,496 edges (data only, issue #27) |
 | Neuron metadata | OpenWorm owmeta | type and transmitter for 302 neurons |
 | Expression | CeNGEN via wormneuroatlas | 130 genes cached per neuron class: knockout loci, ligand-gated receptors, and 35 ion channels |
 | Cell classification | WormAtlas | lineage and anatomical class |
