@@ -125,6 +125,40 @@ transmission is part of the answer but not most of it; the rest should be
 polysynaptic, and whether it actually is in our model is exactly the open
 question.
 
+## Does the model propagate where the animal does?
+
+`scripts/propagation.py` asks the model the question the experiment asked:
+hold the network at rest, drive one cell with a sustained current, integrate
+to steady state, and record every other cell's deflection. Repeat for each of
+the 236 cells the atlas also stimulated. That gives a propagation matrix in
+the atlas's own convention, and unlike the adjacency comparison above it is a
+fair test, because the model reaches most pairs through intermediate cells.
+
+Baseline, 15 pA for 3 s per cell, against the wild-type atlas at q < 0.05:
+
+| quantity | value |
+|---|---|
+| model response on measured-significant pairs | 0.0170 mV (median) |
+| model response on measured-silent pairs | 0.0074 mV (median) |
+| AUC, model response separating real from silent | **0.615** (chance 0.50) |
+| top 1% of model responses that are real | 15.8% (base rate 4.9%) |
+| top 5% | 12.1% |
+| top 10% | 10.0% |
+
+So the model carries real information about which pairs influence each other:
+its strongest predictions are enriched three-fold for measured connections,
+and significant pairs get more than twice the response of silent ones. It is
+also plainly far from the animal, since a perfect predictor would score 1.0.
+
+That number is the point of recording it. It is the first measurement of this
+model's INTERNAL behaviour against data rather than of its output, it sits
+exactly where a connectome-based model is most likely to be wrong, and any
+change to the network can now be asked whether it moved 0.615 up or down.
+
+A note on sampling, learned the hard way: driving only 12 cells gave 0.541,
+close enough to chance to read as a null. The effect is real but needs the
+full set to see.
+
 The `unc-31` arm is a useful control. With dense-core vesicle release gone,
 the share of wired pairs carrying influence drops from 12% to 6%, and the
 share of functional pairs lacking a direct edge rises from 79% to 85%. Both
