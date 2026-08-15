@@ -154,8 +154,8 @@ local, bidirectional and specific. The atlas rewards specificity.
 
 Ranked by what the measurements above actually support.
 
-1. **Fix the inhibitory driving force, then re-measure everything.** This is
-   the first lead in this line of work that is a defect rather than a knob:
+1. **Fix the inhibitory driving force, then re-measure everything** (issue
+   #35). This is the first lead here that is a defect rather than a knob:
    60% of inhibitory synapses depolarising their target is not a modelling
    trade-off, it is wrong. The honest fix is not to move `E_INH`, which is a
    cited constant, but to ask why 148 neurons rest below it. Both the
