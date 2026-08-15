@@ -210,17 +210,45 @@ class SimConfig:
     # tens of ms, so the command neurons integrate a transient, not a hold).
     # Peak command-balance deviation to a strength-1 poke, 3 seeds, min to
     # max, measured WITH touch-cell depression and its 8 s onset filter in
-    # place: anterior wild type 0.0061-0.0065; anterior mec-10 0.0033-0.0037;
-    # anterior mec-4 null 0.0015-0.0018; mid-body 0.0019-0.0023; gentle
-    # posterior 0.0020-0.0024; harsh posterior 0.0024-0.0029. The threshold
-    # sits INSIDE the mec-10 band and above every other, so wild type always
-    # responds, mec-10 responds to a fraction of pokes (the partial-loss
-    # phenotype, Arnadottir et al. 2011 report ~50% residual touch current),
-    # and nulls, mid-body, gentle posterior and harsh posterior stay below.
-    # The onset filter matters here: with instantaneous depression a single
-    # poke disinhibited its own late response through PLM and pushed the
-    # posterior bands past this threshold.
-    reversal_threshold: float = 0.0034
+    # place, and with the spontaneous generator quieted (a stray spontaneous
+    # reversal puts a 0.10 peak in a band whose real value is 0.002).
+    #
+    #                        before chloride   after
+    #   anterior wild type    0.0067-0.0075    0.0060-0.0068
+    #   anterior mec-10       0.0035-0.0043    0.0028-0.0036
+    #   anterior mec-4 null   0.0013-0.0015    0.0010-0.0012
+    #   mid-body              0.0018-0.0021    0.0015-0.0021
+    #   gentle posterior      0.0019-0.0022    0.0011-0.0013
+    #   harsh posterior       0.0023-0.0026    0.0014-0.0017
+    #
+    # The threshold sits INSIDE the mec-10 band and above every other, so
+    # wild type always responds, mec-10 responds to a fraction of pokes (the
+    # partial-loss phenotype, Arnadottir et al. 2011 report ~50% residual
+    # touch current), and nulls, mid-body, gentle posterior and harsh
+    # posterior stay below. The onset filter matters here: with instantaneous
+    # depression a single poke disinhibited its own late response through PLM
+    # and pushed the posterior bands past this threshold.
+    #
+    # RE-DERIVED for the per-cell chloride reversal (issue #35), which shrank
+    # every band. Separation actually improved: wild type clears the highest
+    # competing band by 2.9x against 2.6x before.
+    #
+    # Derived against the protocol `touch_response` actually uses, which is
+    # not the one the bands above were recorded with: it settles 10 s rather
+    # than 12 and does NOT quiet the spontaneous generator, and it reads
+    # systematically lower. Surfacing that mismatch is worth more than the
+    # constant. Peaks in the check's own protocol, seed 2 excluded because a
+    # spontaneous reversal saturates every genotype there at 0.102 and the
+    # paired sham cancels it:
+    #
+    #   anterior wild type   0.0050-0.0064     must cross on 5 of 5
+    #   anterior mec-10      0.0018-0.0031     must cross on 1 to 4 of 5
+    #   everything else      0.0005-0.0019     must never cross
+    #
+    # That leaves a feasible window of (0.0019, 0.0031], and 0.0026 sits in
+    # the middle of it: mec-10 crosses on 2 of 5, wild type on all 5, and the
+    # ceiling clears by 1.4x.
+    reversal_threshold: float = 0.0026
     baseline_tau_s: float = 8.0
     reversal_min_s: float = 0.9
     reversal_max_s: float = 4.0

@@ -70,6 +70,34 @@ MEASURED_REST: dict[str, float] = {
 }
 
 
+# Measured resting potentials of named cells outside the ventral cord. Pinned
+# for the same reason the cord classes are: a cell with no target lands
+# wherever the network solve puts it, and the solve puts them far too
+# depolarised. Measured against these values before they were added, the three
+# pinned cord cells were exact to 0.1 mV while every unpinned cell here was 14
+# to 40 mV high, AVB worst at +27. That is not a small error in a command
+# neuron: it decides whether an inhibitory synapse hyperpolarises it at all.
+#
+#   AVA, AVB   Meng et al. 2024 Sci Adv 10:eadk0002, in situ whole-cell.
+#              AVA is tonically active and depolarised, median -23 mV over a
+#              -30 to -10 mV range (n = 7); AVB sits far below it, median
+#              -57 mV (n = 8). The 34 mV gap between the two premotor
+#              interneurons is the point: they are not equivalent cells, and
+#              a model that rests them 20 mV apart cannot reproduce a command
+#              balance that depends on the difference.
+#   ASEL/ASER  Shindou et al. 2019 Sci Rep 9:3430, in vivo whole-cell,
+#              -61.7 +/- 1.1 mV (n = 22) and -56.6 +/- 1.0 mV (n = 7). The
+#              left/right pair differ, which is why they are listed
+#              separately rather than as a class. This is the same paper the
+#              1.6-2.2 GOhm input resistance range comes from.
+MEASURED_REST_CELLS: dict[str, float] = {
+    "AVAL": -23.0, "AVAR": -23.0,
+    "AVBL": -57.0, "AVBR": -57.0,
+    "ASEL": -61.7,
+    "ASER": -56.6,
+}
+
+
 # The six touch receptor neurons. Habituation of the tap-withdrawal response
 # lives at their OUTPUT synapses, not in the receptor current: the decrement
 # is synaptic depression at the sensory-to-interneuron connections (Wicks &
@@ -442,6 +470,11 @@ class NervousSystem:
             cls = conn.cell_info[name].get("vnc_class")
             if cls in MEASURED_REST:
                 self._rest_targets[conn.index[name]] = MEASURED_REST[cls]
+        # Named cells outside the cord, by name rather than class because the
+        # ASE pair differ from each other.
+        for name, target in MEASURED_REST_CELLS.items():
+            if name in conn.index:
+                self._rest_targets[conn.index[name]] = target
 
         # Per-cell passive properties. Muscle differs from neuron in all three,
         # so they are arrays rather than scalars; see NeuralParams for the

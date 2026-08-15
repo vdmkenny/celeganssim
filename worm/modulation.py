@@ -101,7 +101,23 @@ MOD_TAU_S = 60.0
 # which is their dissociation. The layer is meant to bias a decision the
 # fast network is already making, not to make it: at gain 5 the same
 # machinery cost the animal three quarters of its speed.
-MOD_GAIN_PA = 0.6
+#
+# RE-DERIVED for the per-cell chloride reversal (issue #35). Correctly signed
+# inhibition changed the activation the dopaminergic cells reach on food, and
+# at the old 0.6 slowing fell to 4.4%, outside Sawin's band. Swept against the
+# check's own assay, reporting the knockouts at every point because the
+# dissociation is the result and the slowing on its own is not:
+#
+#   gain   wild type   cat-2   tph-1
+#   0.6         4.4%   -0.9%    5.4%   too weak
+#   0.7         9.0%   -0.9%   10.6%
+#   0.8        16.3%   -1.0%   28.4%   closest to the 18.3% this used to give
+#   1.2        39.7%   -1.1%   40.3%   past the band
+#
+# The curve is steep, which is the cliff this layer's docstring warns about,
+# but cat-2 stays at about zero throughout, so the pathway is still carrying
+# the dissociation rather than the gain manufacturing a slowdown.
+MOD_GAIN_PA = 0.8
 
 
 class MonoamineLayer:
