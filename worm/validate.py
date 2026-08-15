@@ -1135,12 +1135,10 @@ def _chloride_gradient():
     mus_pure = ns._e_frac[mus] < 1e-9
     mus_pole = float(np.median(ns.E_syn[mus][mus_pure]))
 
-    return {
-        "pass": wrong == 0 and abs(mus_pole - E_INH_MUSCLE) < 0.5,
-        "detail": (f"{n_pure} chloride synapses onto neurons, {wrong} "
-                   f"depolarising; muscle chloride reversal {mus_pole:+.2f} mV "
-                   f"against {E_INH_MUSCLE:+.1f} measured"),
-    }
+    ok = wrong == 0 and abs(mus_pole - E_INH_MUSCLE) < 0.5
+    return ok, (f"{n_pure} chloride synapses onto neurons, {wrong} "
+                f"depolarising; muscle chloride reversal {mus_pole:+.2f} mV "
+                f"against {E_INH_MUSCLE:+.1f} measured")
 
 
 @check("losing both chloride extruders paralyses the animal",
@@ -1164,11 +1162,9 @@ def _chloride_extruder_mutants():
     wt = np.mean([gait(seed=s)["speed"] for s in (0, 1)])
     dbl = np.mean([gait(knockouts=("kcc-2", "abts-1"), seed=s)["speed"]
                    for s in (0, 1)])
-    return {
-        "pass": dbl < 0.25 * wt,
-        "detail": (f"wild type {wt:.4f} mm/s, kcc-2;abts-1 double {dbl:.4f} "
-                   f"mm/s ({dbl / wt:.0%} of wild type, expected paralysis)"),
-    }
+    return dbl < 0.25 * wt, (
+        f"wild type {wt:.4f} mm/s, kcc-2;abts-1 double {dbl:.4f} mm/s "
+        f"({dbl / wt:.0%} of wild type, expected paralysis)")
 
 
 @check("receptor-derived signs match documented synapses",
