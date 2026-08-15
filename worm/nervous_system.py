@@ -42,6 +42,47 @@ MEASURED_REST: dict[str, float] = {
 }
 
 
+# Measured resting potentials of named cells outside the ventral cord.
+#
+# Pinned for the same reason the cord classes are, and the measurement that
+# motivated it is stark: the three cells with targets land on their published
+# values to 0.1 mV, while every cell WITHOUT one rests 14 to 40 mV too
+# depolarised. AVA came out at -9.0 against a measured -23.0, AVB at -30.0
+# against -57.0, ASEL at -30.3 against -61.7, ASER at -39.1 against -56.6.
+# A cell with no target does not land somewhere reasonable, it lands wherever
+# the network solve puts it, and that is systematically far too depolarised.
+#
+# AVB is the consequential one. It is a command neuron, the forward/backward
+# balance this model makes every locomotion decision from is a difference
+# between AVA and AVB, and a cell resting 27 mV high cannot be hyperpolarised
+# by an inhibitory synapse at all. Meng et al. measured the two premotor
+# interneurons 34 mV apart; unpinned, this model rested them 20 mV apart and
+# both in the wrong place.
+#
+#   AVA, AVB   Meng et al. 2024 Sci Adv 10:eadk0002, in situ whole-cell.
+#              AVA is tonically active and depolarised, median -23 mV over a
+#              -30 to -10 mV range (n = 7), and is the more depolarised of any
+#              neuron recorded in this animal; AVB sits far below it at a
+#              median of -57 mV (n = 8).
+#   ASEL/ASER  Shindou et al. 2019 Sci Rep 9:3430, in vivo whole-cell,
+#              -61.7 +/- 1.1 mV (n = 22) and -56.6 +/- 1.0 mV (n = 7). Listed
+#              per cell rather than as a class because the left/right pair
+#              genuinely differ. Same paper as the 1.6-2.2 GOhm input
+#              resistance range above, which is ASER and ASEL respectively.
+#
+# ASEL settles 9 mV depolarised of its target where AVA, AVB and the cord
+# cells land within 0.4 mV, because it is gap-coupled to ASER and the two
+# pull on each other. That is a physical constraint of the pair, not a calibration
+# failure, so calibrate_rest is left to do what it can rather than being
+# forced.
+MEASURED_REST_CELLS: dict[str, float] = {
+    "AVAL": -23.0, "AVAR": -23.0,
+    "AVBL": -57.0, "AVBR": -57.0,
+    "ASEL": -61.7,
+    "ASER": -56.6,
+}
+
+
 # The six touch receptor neurons. Habituation of the tap-withdrawal response
 # lives at their OUTPUT synapses, not in the receptor current: the decrement
 # is synaptic depression at the sensory-to-interneuron connections (Wicks &
@@ -384,6 +425,11 @@ class NervousSystem:
             cls = conn.cell_info[name].get("vnc_class")
             if cls in MEASURED_REST:
                 self._rest_targets[conn.index[name]] = MEASURED_REST[cls]
+        # Named cells outside the cord, by name rather than class because the
+        # ASE pair genuinely differ from one another.
+        for name, target in MEASURED_REST_CELLS.items():
+            if name in conn.index:
+                self._rest_targets[conn.index[name]] = target
 
         # Per-cell passive properties. Muscle differs from neuron in all three,
         # so they are arrays rather than scalars; see NeuralParams for the
