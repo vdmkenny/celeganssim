@@ -210,6 +210,69 @@ resting range without needing any clamp. Choosing either would be fitting
 the constant to the metric or to the model, which is the failure mode this
 document exists to record.
 
+### The re-derivation, attempted and measured
+
+The obvious rescue is to re-derive the constants those five checks rest on.
+That was done, on the same branch, and it does not converge: **38 passing
+against main's 42**, with 5 failures and 11 expected failures.
+
+What re-derived cleanly. The resting potentials, pinned to Meng et al. 2024
+and Shindou et al. 2019, which is pure literature and adds no constant.
+`reversal_threshold` 0.0034 to 0.0018 against re-measured bands.
+`MOD_GAIN_PA` 0.6 to 0.7. mec-10, unc-13 and the resting-range check all
+came back. The gain had to be swept **twice**, which is itself the result:
+at a threshold of 0.0026 a gain of 0.7 gives 9% slowing and 0.8 gives 32%,
+while at 0.0018 the same 0.7 gives 27.5%. A lower threshold admits more
+reversals and an interrupted forward run reads as slowing, so the two
+constants are not independent and neither can be moved alone.
+
+**The Sawin pass is hollow, and the suite caught it rather than the author.**
+Food slowing reads 27.5% with cat-2 at about zero, which is inside the
+measured band and looks like the pathway working. But spontaneous reversals
+run 13.3/min ON FOOD against 2.3 off it, which is backwards: the animal is
+not slowing, it is reversing often enough that forward progress drops. That
+is the cliff `worm/modulation.py` already documents for the peptide layer,
+reached now by the monoamine layer because the corrected network needs a
+larger gain to move at all. A check passing for the wrong reason is worse
+than one failing honestly.
+
+**The omega coupling has no feasible threshold.** During a reversal the
+decision variable does not decay, it oscillates at gait frequency: after a
+harsh anterior poke it runs 0.0297, 0.0041, 0.0305, 0.0041, 0.0013 at 0.2 s
+intervals. The reversal ends at the first TROUGH below threshold after
+`reversal_min_s`, so its duration is quantised to the gait cycle, and
+baseline's 1.51 s is exactly one cycle more than the corrected network's
+0.90 s. Holding it one cycle longer needs the threshold below the 0.0013
+trough; the touch bands need it above the 0.0013 ceiling. Same number, no
+margin. This is the single-threshold readout that issue #12 already calls
+terminal and issue #7 owns the redesign of. The corrected network does not
+create that conflict, it removes the slack that was hiding it.
+
+Three more fell out of the same machinery being off its calibration: tap
+habituation increments instead of decrementing, tdc-1 loses every omega
+where it should merely impair them, and the sharpness check finds omegas but
+no plain reversal exits to compare them against.
+
+### The finding that outlived the attempt
+
+Every cell without a resting-potential target rests **14 to 40 mV too
+depolarised**, while the three pinned cord cells are exact to 0.1 mV:
+
+| cell | model | measured | error |
+|---|---|---|---|
+| AVA | -9.0 | -23.0 | +14 |
+| AVB | -30.0 | -57.0 | **+27** |
+| ASEL | -30.3 | -61.7 | +31 |
+| ASER | -39.1 | -56.6 | +18 |
+
+AVB is the consequential one. A command neuron resting 27 mV high cannot be
+hyperpolarised by an inhibitory synapse, and the forward/backward balance is
+a difference between exactly AVA and AVB. Meng et al. measured them 34 mV
+apart; this model rests them 20 mV apart, both in the wrong place. So the
+chloride defect is downstream of a resting-potential defect, and pinning
+those four cells is right on its own terms: it is literature, it introduces
+no constant, and it fixed unc-13 by itself.
+
 **A correction to how this was first reported.** Issue #35 framed the
 finding as "the network delivers 8x more depolarising than hyperpolarising
 current". That framing is weaker than it looked: fixing the sign inversion
