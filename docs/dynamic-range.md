@@ -269,9 +269,41 @@ AVB is the consequential one. A command neuron resting 27 mV high cannot be
 hyperpolarised by an inhibitory synapse, and the forward/backward balance is
 a difference between exactly AVA and AVB. Meng et al. measured them 34 mV
 apart; this model rests them 20 mV apart, both in the wrong place. So the
-chloride defect is downstream of a resting-potential defect, and pinning
-those four cells is right on its own terms: it is literature, it introduces
-no constant, and it fixed unc-13 by itself.
+chloride defect is downstream of a resting-potential defect.
+
+### Route 10: correct the resting potentials alone
+
+That reading suggested pinning those four cells was right on its own terms,
+independent of the chloride work: four published values, no new constant,
+and it had fixed unc-13 by itself. Tested in isolation off clean main, on
+the `measured-rest` branch, and **it is refuted too: 37 passing against
+main's 42.**
+
+The pinning works. AVA lands at -22.8 against a measured -23.0, AVB at
+-56.7 against -57.0, the previously pinned cord cells stay exact, and ASEL
+settles 9 mV high only because it is gap-coupled to ASER.
+
+What breaks is tap habituation, mec-10 partiality, chemotaxis and both omega
+checks. **The chemotaxis failure is the informative one:** wild type scores
++0.17 and che-1 scores +0.17, identical to two decimals, so salt
+discrimination is simply gone. ASEL and ASER *are* the salt sensors, and
+moving them from the -30.3 and -39.1 mV the network solve gave them to their
+measured -61.7 and -56.6 changes what a salt gradient does to them. The
+chemotaxis result was resting on those two cells sitting 20 to 30 mV
+depolarised of where they were measured.
+
+So the conclusion generalises, and it is worse than it first looked. The
+fragile thing was never the chloride reversal specifically. **Any correction
+to the resting potentials breaks the behavioural layer, because that layer
+was calibrated against the wrong ones.** Two independent routes to the same
+defect now cost 4 and 5 checks respectively.
+
+That leaves the defect measured, documented and unfixed, which is the honest
+position. Nothing here should be landed piecemeal. What it needs is the
+behavioural layer re-derived against correct resting potentials as one piece
+of work, and that is the same conclusion the omega analysis reached from the
+other end: issues #7 and #12 own the readout redesign that would make it
+possible.
 
 **A correction to how this was first reported.** Issue #35 framed the
 finding as "the network delivers 8x more depolarising than hyperpolarising
