@@ -115,7 +115,13 @@ Two numbers worth keeping in mind whenever this model claims something:
 is not a functional one. A model that treats every edge as a live channel is
 over-connected relative to the animal, which is one plausible reason our
 network sits compressed around 0.5 with everything shunting everything else
-(issue #17).
+(issue #17). The weight-redistribution version of that idea has since been
+tested and refuted: making the weight distribution heavy-tailed at preserved
+total removes 90% of the tonic shunt and NARROWS the dynamic range 10-fold,
+because the shunt and the signal ride the same weights (docs/dynamic-range.md,
+route 5). Sparsification by measured influence remains untested, but it
+cannot be scored on the AUC below, which rises as chemical transmission is
+removed by any means.
 
 **79% of functional pairs have no direct edge.** Most influence is indirect,
 and the honest comparison is against the model's PROPAGATION rather than its
@@ -138,9 +144,9 @@ Baseline, 15 pA for 3 s per cell, against the wild-type atlas at q < 0.05:
 
 | quantity | value |
 |---|---|
-| model response on measured-significant pairs | 0.0170 mV (median) |
-| model response on measured-silent pairs | 0.0074 mV (median) |
-| AUC, model response separating real from silent | **0.615** (chance 0.50) |
+| model response on measured-significant pairs | 0.0172 mV (median) |
+| model response on measured-silent pairs | 0.0075 mV (median) |
+| AUC, model response separating real from silent | **0.618 ± 0.014** (chance 0.50) |
 | top 1% of model responses that are real | 15.8% (base rate 4.9%) |
 | top 5% | 12.1% |
 | top 10% | 10.0% |
@@ -150,10 +156,29 @@ its strongest predictions are enriched three-fold for measured connections,
 and significant pairs get more than twice the response of silent ones. It is
 also plainly far from the animal, since a perfect predictor would score 1.0.
 
-That number is the point of recording it. It is the first measurement of this
-model's INTERNAL behaviour against data rather than of its output, it sits
-exactly where a connectome-based model is most likely to be wrong, and any
-change to the network can now be asked whether it moved 0.615 up or down.
+That is worth recording because it is the first measurement of this model's
+INTERNAL behaviour against data rather than of its output, and it sits
+exactly where a connectome-based model is most likely to be wrong.
+
+**It is not, however, a referee for network changes, and it was briefly
+treated as one.** The error bar above is a bootstrap over the 236 stimulated
+cells, which is the real unit of resampling rather than the pair: 95% CI
+[0.592, 0.649]. Against that, the injection current alone moves the SAME
+unmodified model from 0.6121 at 5 pA to 0.6279 at 45 pA, and four separate
+model changes measured against it moved it by 0.001 to 0.013. The AUC is now
+computed exactly (Mann-Whitney U over all 22,107 measured pairs; the previous
+20,000-pair Monte Carlo missed by 0.003 to 0.005) and always printed with its
+interval. See docs/dynamic-range.md.
+
+Two controls make the number interpretable, and the first is uncomfortable:
+**deleting every chemical synapse improves agreement**, to 0.6439 (paired
+delta +0.026, 95% CI [+0.002, +0.052]), while gap junctions alone are what
+carry it, chemical-only scoring 0.5997. That is not a tie artefact from the
+sparser network; restricted to pairs live in both conditions the
+gap-junction-only network still wins, 0.6316 against 0.6031. The cause was
+traced: chemical transmission in this model delivers eight times more
+depolarising than hyperpolarising current, so driving any cell spreads an
+indiscriminate excitatory halo across pairs the animal calls silent.
 
 A note on sampling, learned the hard way: driving only 12 cells gave 0.541,
 close enough to chance to read as a null. The effect is real but needs the
