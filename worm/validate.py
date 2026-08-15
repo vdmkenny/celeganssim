@@ -421,7 +421,8 @@ def _provenance():
     from pathlib import Path
 
     from . import parameters
-    allowed = {"measured", "published", "assay", "tuned", "scripted"}
+    allowed = {"measured", "published", "assay", "tuned", "inferred",
+               "scripted"}
     params = parameters.PARAMETERS
 
     bad_tag = sorted(p.name for p in params.values()
@@ -1097,6 +1098,77 @@ def _expression_truth():
                 + (f", and CeNGEN also reports it in {extra}" if extra else "")
                 + f"; glc-3 covers AIY: {aiy_ok}; "
                 f"glr-1 covers command cells {sorted(cmd)}")
+
+
+@check("chloride synapses hyperpolarise, because the cell extrudes chloride",
+       "every synapse the receptor pass resolved as chloride-mediated should "
+       "hyperpolarise its target at rest, in an animal with both chloride "
+       "extruders intact. Held against the one chloride reversal in this "
+       "animal with a measured basis: body-wall muscle rests at -25 mV and "
+       "its chloride reversal is -30 mV, so a rule that puts E_Cl below each "
+       "cell's OWN rest has to land on -30 for muscle",
+       "Bellemer et al. 2011 EMBO J 30:1852 (KCC-2 and ABTS-1 extrude "
+       "chloride; lose both and inhibitory transmitters excite); "
+       "Gao & Zhen 2011 PNAS 108:2557 and Richmond & Jorgensen 1999 for the "
+       "muscle pair",
+       section="consistency")
+def _chloride_gradient():
+    from .connectome import E_INH_MUSCLE
+    s = _sim()
+    ns = s.ns
+    neu = ~ns.conn.is_muscle
+    ns.reset()
+    zero = np.zeros(ns.conn.n)
+    for _ in range(4000):
+        ns.step(1.0, zero, noise=0.0)
+    V = ns.V
+
+    live = (ns.Gs_eff * ns.g_syn_row) > 0
+    pure = live & (ns._e_frac < 1e-9)
+    wrong = int((pure & (ns.E_syn > V[:, np.newaxis]))[neu].sum())
+    n_pure = int(pure[neu].sum())
+
+    # The rule has to reproduce the measured muscle value, which is the only
+    # thing anchoring the offset. Solving the chloride pole and the resting
+    # calibration separately instead of jointly leaves this 12 mV out.
+    mus = np.where(ns.conn.is_muscle)[0]
+    mus_pure = ns._e_frac[mus] < 1e-9
+    mus_pole = float(np.median(ns.E_syn[mus][mus_pure]))
+
+    return {
+        "pass": wrong == 0 and abs(mus_pole - E_INH_MUSCLE) < 0.5,
+        "detail": (f"{n_pure} chloride synapses onto neurons, {wrong} "
+                   f"depolarising; muscle chloride reversal {mus_pole:+.2f} mV "
+                   f"against {E_INH_MUSCLE:+.1f} measured"),
+    }
+
+
+@check("losing both chloride extruders paralyses the animal",
+       "kcc-2 and abts-1 are redundant chloride extruders. Either single "
+       "mutant should be near wild type, while the double should be "
+       "paralysed, because chloride flow reverses and the transmitters that "
+       "should inhibit start to excite. Scored on crawling speed",
+       "Bellemer et al. 2011 EMBO J 30:1852: body length 1212 um wild type, "
+       "1145 kcc-2, 1064 abts-1, and 510 um in the double, whose body bends "
+       "are almost absent",
+       xfail="the chloride reversal moves correctly and in the right order "
+             "(wild type +5.0 mV below rest, either single near neutral, the "
+             "double 5.0 mV above), and the animal barely slows: 0.246 mm/s "
+             "wild type against 0.218 in the double, an 11% loss where the "
+             "measurement is paralysis. Reversing inhibition cannot stop an "
+             "animal whose undulation is a scripted per-muscle current rather "
+             "than something the network generates, so this check is owned by "
+             "issue #10 and should start passing when the wave does",
+       section="genetics")
+def _chloride_extruder_mutants():
+    wt = np.mean([gait(seed=s)["speed"] for s in (0, 1)])
+    dbl = np.mean([gait(knockouts=("kcc-2", "abts-1"), seed=s)["speed"]
+                   for s in (0, 1)])
+    return {
+        "pass": dbl < 0.25 * wt,
+        "detail": (f"wild type {wt:.4f} mm/s, kcc-2;abts-1 double {dbl:.4f} "
+                   f"mm/s ({dbl / wt:.0%} of wild type, expected paralysis)"),
+    }
 
 
 @check("receptor-derived signs match documented synapses",

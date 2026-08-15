@@ -12,6 +12,11 @@ Each entry carries a provenance tag:
   assay       assay geometry -- a modelling choice, named and documented
   tuned       fit by hand to a behavioural target; the target is named at the
               definition site
+  inferred    read off a measurement made in a DIFFERENT cell type or
+              context, where the quantity itself has never been measured.
+              Distinct from tuned: nothing was fitted, and distinct from
+              measured, because the animal was never asked this question.
+              The inference and what bounds it are stated at the definition
   scripted    a placeholder for a mechanism the model does not have yet --
               these are the numbers the project is trying to delete
 

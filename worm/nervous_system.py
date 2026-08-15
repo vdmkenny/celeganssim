@@ -26,8 +26,36 @@ import math
 
 import numpy as np
 
-from .connectome import Connectome
+from .connectome import E_INH, E_INH_MUSCLE, Connectome
 from .genome import Genome
+
+
+# Chloride homeostasis: two extruders against one importer.
+#
+# Bellemer et al. 2011 EMBO J 30:1852 measured the logic. Either extruder
+# single mutant is mildly affected, body length falling from 1212 um to 1145
+# (kcc-2) or 1064 (abts-1), and already reverses the muscimol response. The
+# DOUBLE mutant is paralysed at 510 um with body bends almost absent, because
+# chloride flow reverses and inhibitory transmitters start to excite. So the
+# two extruders are largely redundant, neither alone carries the gradient, and
+# what opposes them is the importer NKCC-1.
+#
+# The shares are a GUESS constrained by those body lengths, with abts-1 given
+# the larger one because its single mutant is the more affected of the two.
+# What the shares have to reproduce is the ORDERING, which they do: wild type
+# holds E_Cl below rest, either single lands near neutral, and the double puts
+# it above rest so that GABA depolarises.
+CHLORIDE_EXTRUDERS: dict[str, float] = {"kcc-2": 0.45, "abts-1": 0.55}
+CHLORIDE_IMPORTER = "nkcc-1"
+
+# Passes of the chloride fixed point, and the residual that ends it. Each pass
+# moves rest by at most the inhibitory share of the conductance, about 16%, so
+# a handful is plenty; the tolerance is far below any voltage that matters.
+# Floor on the chloride reversal, set below the most hyperpolarised cell ever
+# measured in this animal (VA5, -71.7 mV) so no measurement is affected. GUESS.
+CL_POLE_FLOOR_MV = -80.0
+CL_SOLVE_ITERATIONS = 24
+CL_SOLVE_TOL_MV = 1e-6
 
 
 # Measured resting potentials of ventral cord motor neurons, whole-cell current
@@ -112,6 +140,19 @@ class NeuralParams:
     # attributed to a high chloride permeability (Gao & Zhen 2011), which is
     # why it cannot be recovered from a neuron's -65 mV leak.
     E_muscle = -25.0        # resting potential, mV
+    # How far below its own resting potential a cell holds its chloride
+    # reversal. Read off the muscle pair above: rest -25 mV against a -30 mV
+    # chloride reversal, so the extruders win by 5 mV and GABA there is
+    # mostly a shunt. GUESS for neurons, which have never had a chloride
+    # reversal measured; see _apply_chloride_gradient for why this value
+    # rather than the one that scores best.
+    cl_extrusion_mv = 5.0   # E_Cl below rest, mV
+    # How far ABOVE rest the importer NKCC-1 drives the chloride reversal once
+    # the extruders are gone. GUESS, taken symmetric with the extruded case
+    # because nothing measures it; what constrains it is that Bellemer's
+    # extruder double mutant must come out clearly reversed rather than merely
+    # shunting, since that mutant is paralysed and hypercontracted.
+    cl_import_mv = 5.0      # E_Cl above rest with no extrusion, mV
     # Input resistance 1.0 +/- 0.08 GOhm (n = 10), Jospin et al. 2002 -> 1 nS.
     G_leak_muscle = 1.0     # leak conductance, nS
     # ~70 pF, Richmond, "Electrophysiological recordings from the neuromuscular
@@ -292,6 +333,11 @@ PROVENANCE = {
     "E_exc": "published",
     "E_inh": "published",   # Wicks et al. 1996 Table 1
     "E_muscle": "measured",      # Gao & Zhen 2011; Jospin et al. 2002
+    # Read off the measured muscle pair (rest -25, E_Cl -30) and carried to
+    # neurons, where no chloride reversal has ever been measured because the
+    # gramicidin method fails on these membranes (Bellemer et al. 2011).
+    "cl_extrusion_mv": "inferred",
+    "cl_import_mv": "inferred",  # symmetric with the above; nothing measures it
     "G_leak_muscle": "measured", # R_in 1.0 GOhm, Jospin et al. 2002
     "C_muscle": "measured",      # ~70 pF, Richmond WormBook
     "ca_rise_ms": "measured",    # Butler et al. 2015 Fig 3b (GCaMP3)
@@ -341,7 +387,19 @@ class NervousSystem:
         # postsynaptic cell's measured receptor expression where possible
         # (glutamate is target-dependent in this animal), with a
         # transmitter-level heuristic as the tagged fallback.
-        self.E_syn = conn.E_syn
+        #
+        # Copied, not aliased: _apply_chloride_gradient rewrites the chloride
+        # end of every edge against this cell's own resting potential, and a
+        # Connectome can be shared between several NervousSystem instances.
+        self.E_syn = conn.E_syn.copy()
+        # The connectome's nominal chloride pole per postsynaptic cell, which
+        # is what the receptor-derived signs were expressed against.
+        self._nominal_cl_pole = np.where(conn.is_muscle, E_INH_MUSCLE, E_INH)
+        self._e_frac = None
+        # How far below rest the chloride reversal sits, in mV. Positive
+        # means inhibition inhibits. Set by the genome; see
+        # CHLORIDE_EXTRUDERS and _apply_chloride_gradient.
+        self.cl_offset_mv = self.p.cl_extrusion_mv
 
         # Resting release follows the sigmoid's own foot. With the offset
         # at zero this is phi(rest) = 0.5 and s_eq is the Wicks value; with
@@ -456,8 +514,116 @@ class NervousSystem:
         self._ablated_idx = np.array(
             [self.conn.index[n] for n in self.ablated if n in self.conn.index],
             dtype=int)
+        # Chloride homeostasis, as the balance of extrusion against import.
+        # Applied here rather than inside the chloride solve so ablation and
+        # knockout share one entry point.
+        #
+        #   offset = extrusion_mv * E  -  import_mv * (1 - E) * I
+        #
+        # with E the surviving extrusion capacity and I the importer. A
+        # positive offset holds E_Cl below rest and inhibition inhibits; a
+        # negative one puts it above rest and inhibition excites, which is
+        # the measured double-mutant condition. The importer only bites once
+        # extrusion is compromised, which is why the wild type is unaffected
+        # by nkcc-1 and the extruder double mutant is not.
+        extrusion = 1.0
+        for gene, share in CHLORIDE_EXTRUDERS.items():
+            resolved = g.resolve(gene)
+            if resolved is not None and resolved in g.knockouts:
+                extrusion -= share
+        extrusion = float(np.clip(extrusion, 0.0, 1.0))
+        importer = g.resolve(CHLORIDE_IMPORTER)
+        imports = 0.0 if (importer is not None
+                          and importer in g.knockouts) else 1.0
+        self.cl_offset_mv = float(
+            self.p.cl_extrusion_mv * extrusion
+            - self.p.cl_import_mv * (1.0 - extrusion) * imports)
+
         # Recompute thresholds so the surviving network still rests at
         # equilibrium after cells are removed.
+        self.V_th = self._solve_thresholds()
+        self._apply_chloride_gradient()
+
+    def _apply_chloride_gradient(self) -> None:
+        """Hold each chloride reversal below its OWN cell's resting potential.
+
+        E_Cl is not a constant of the animal, it is a quantity every excitable
+        cell maintains. C. elegans neurons and muscles extrude chloride
+        through KCC-2 and the Na-driven Cl-HCO3 exchanger ABTS-1; lose one and
+        the animal is mildly impaired, lose both and chloride flow REVERSES,
+        inhibitory transmitters excite, and the animal is paralysed
+        (Bellemer et al. 2011 EMBO J 30:1852).
+
+        Modelling it as a single number was the bug this fixes. The
+        connectome assigns a chloride-mediated synapse the fixed neuronal
+        reversal of -48 mV, but neurons here rest anywhere from -64 to -23 mV,
+        so 1,029 of the 1,712 chloride edges were DEPOLARISING their target:
+        the double-mutant condition, network-wide, in an animal that is
+        supposed to be wild type. See docs/dynamic-range.md.
+
+        The offset is anchored on the one chloride reversal in this animal
+        with a measured basis. Body-wall muscle rests at -25 mV (E_muscle,
+        Gao & Zhen 2011) and its chloride reversal is -30 mV (E_INH_MUSCLE,
+        derived from Richmond & Jorgensen 1999), so the extruders hold E_Cl
+        exactly 5 mV below rest and inhibition there acts mainly by shunting.
+        Applying that same offset to neurons reproduces the muscle value to
+        0.08 mV, which is the consistency check `_chloride_gradient` makes.
+
+        The offset for NEURONS is a GUESS in the strict sense: no C. elegans
+        neuron has a measured chloride reversal, and Bellemer says why, the
+        standard gramicidin method fails to perforate these membranes. Two
+        things bound how much that matters. It is the least invented value
+        available, being read off the one cell type that was measured. And
+        muscle is arguably the worst available model for a neuron, since its
+        depolarised rest is itself attributed to unusually high chloride
+        permeability, so a neuron may well hold a steeper gradient. Measured
+        sensitivity, on the propagation AUC against the functional atlas:
+        5 mV gives +0.0003 +/- 0.0036, 10 mV gives +0.0089 +/- 0.0036 and
+        15 mV gives +0.0052 +/- 0.0039. The best-scoring offset is therefore
+        NOT the one used here, deliberately: picking 10 because it scores
+        better is fitting the constant to the metric, and this metric cannot
+        resolve that difference honestly (docs/citations.md).
+
+        Circular by construction, since rest depends on E_syn and E_syn now
+        depends on rest, so it is iterated. calibrate_rest runs INSIDE that
+        loop rather than after it: it pins the cells with a measured resting
+        potential by moving E_leak, which moves rest, which moves the pole.
+        Solving the two separately leaves muscle 12 mV off its measured
+        chloride reversal, which was the first version of this and is what
+        `_chloride_gradient` now guards.
+
+        What this does NOT reach are the edges the receptor pass could not
+        resolve. Those carry a continuous blend between the chloride pole and
+        the cation reversal, so an edge that is only marginally chloride sits
+        most of the way to 0 mV and still depolarises. That is a real and
+        separate bias, since it means "sign unknown" is modelled as "mildly
+        excitatory", and it is issue #36 rather than something to fix here.
+        """
+        from .connectome import E_EXC
+
+        # Excitatory fraction per edge: 1 = pure cation, 0 = pure chloride.
+        # Recovered from the connectome's nominal poles so the continuous
+        # blend it uses for edges expression could not resolve is preserved
+        # and only the chloride END of each edge moves.
+        if self._e_frac is None:
+            pole = self._nominal_cl_pole[:, np.newaxis]
+            self._e_frac = (self.conn.E_syn - pole) / (E_EXC - pole)
+
+        for _ in range(CL_SOLVE_ITERATIONS):
+            self.calibrate_rest()
+            V_op = self._solve_thresholds() - self.p.v_th_offset_mv
+            # A chloride gradient is bounded: a cell cannot hold E_Cl below
+            # what its achievable internal chloride allows, and letting the
+            # pole track an arbitrarily hyperpolarised cell is what drove
+            # the network past its -85 mV operating floor. Clamped below
+            # VA5's measured -71.7 mV so no measured cell is affected.
+            pole = np.clip(V_op - self.cl_offset_mv,
+                           CL_POLE_FLOOR_MV, None)[:, np.newaxis]
+            new = pole + self._e_frac * (E_EXC - pole)
+            moved = float(np.abs(new - self.E_syn).max())
+            self.E_syn = new
+            if moved < CL_SOLVE_TOL_MV:
+                break
         self.V_th = self._solve_thresholds()
 
     def refresh_genetics(self) -> None:
