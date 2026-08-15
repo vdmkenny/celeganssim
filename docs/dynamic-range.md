@@ -150,31 +150,115 @@ It follows directly from the section above. Chemical transmission here is an
 excitatory halo onto pairs the animal calls silent, while gap junctions are
 local, bidirectional and specific. The atlas rewards specificity.
 
+## Route 9: the inhibitory driving force
+
+Attempted, correct, and not merged. It is on the `chloride-gradient` branch
+and it is the ninth entry in the table above in everything but placement.
+
+`E_INH` was one constant, -48 mV, applied to every neuron while neurons in
+this model rest anywhere from -64 to -23 mV, so 1,029 of the 1,712 edges
+wired to that reversal were DEPOLARISING their target.
+
+**The literature settles that this is wrong without any appeal to the
+model.** Every C. elegans neuron whose resting potential has been measured,
+except one, rests below -48 mV:
+
+| cell | rest | source |
+|---|---|---|
+| VA5 | -71.7 +/- 2.4 mV (n = 15) | Liu, Chen & Wang 2014 Nat Commun 5:5155 |
+| ASEL | -61.7 +/- 1.1 mV (n = 22) | Shindou et al. 2019 Sci Rep 9:3430 |
+| AVB | -57 mV median (n = 8) | Meng et al. 2024 Sci Adv 10:eadk0002 |
+| ASER | -56.6 +/- 1.0 mV (n = 7) | Shindou et al. 2019 |
+| VB6 | -53.2 +/- 2.5 mV (n = 13) | Liu et al. 2014 |
+| VD5 | -45.8 +/- 1.9 mV (n = 15) | Liu et al. 2014 |
+| AVA | -23 mV median (n = 7) | Meng et al. 2024 |
+
+Bellemer et al. 2011 EMBO J 30:1852 names the condition that produces:
+C. elegans extrudes chloride through KCC-2 and ABTS-1, and an animal
+lacking both is paralysed at 510 um against a wild-type 1212 um, with body
+bends almost absent, precisely because chloride flow reverses and
+inhibitory transmitters begin to excite. The model was running that mutant
+network-wide and calling it wild type.
+
+**The fix, and what it achieved.** Hold E_Cl below each cell's OWN rest,
+solved jointly with the resting calibration since the two are circular. The
+offset is read off the one chloride reversal in this animal with a measured
+basis: muscle rests at -25 mV (Gao & Zhen 2011) against a -30 mV chloride
+reversal (Richmond & Jorgensen 1999), so the extruders win by 5 mV. That
+rule reproduces the muscle value to 0.00 mV, and takes chloride synapses
+depolarising their target from 1,029 of 1,712 to **0 of 785**.
+
+**Why it is not merged.** It breaks five behavioural checks and they do not
+come back: mec-10 goes fully touch-insensitive where it should be partial,
+unc-13 crawls at 0.152 mm/s against a near-paralysed target, **no omega
+turns occur at all**, and food slowing falls from 18.3% to 4.4%, which is
+the monoamine layer's one earned result. It also drove the resting
+distribution past the -85 mV floor, to -86.7 mV; a physiological clamp on
+the pole fixes that and fixes nothing else.
+
+The cause is the same one that killed route 1. Those constants were derived
+against the network as it was, and the network as it was had inverted
+inhibition doing load-bearing work: it was acting as a restoring force on
+the resting distribution, which is why removing it lets the spread run to
+the floor. Absorbing this needs the reversal threshold, the omega coupling,
+the modulation gain and the chemotaxis scoring re-derived together.
+
+**Two values were declined on purpose,** and both would have made this look
+better. An offset of 10 mV scores better on the propagation AUC (+0.0089
++/- 0.0036 against +0.0003 for the anchored 5 mV), and 2.5 mV keeps the
+resting range without needing any clamp. Choosing either would be fitting
+the constant to the metric or to the model, which is the failure mode this
+document exists to record.
+
+**A correction to how this was first reported.** Issue #35 framed the
+finding as "the network delivers 8x more depolarising than hyperpolarising
+current". That framing is weaker than it looked: fixing the sign inversion
+makes the ratio WORSE, 8.5x to 18.2x, because a correctly placed E_Cl sits
+close to rest and inhibition becomes almost purely shunting, which is what
+inhibition in this animal largely is. A current-asymmetry measure cannot
+see shunting inhibition, so it was the wrong instrument. The sign inversion
+was always the defensible finding.
+
 ## What to try next
 
 Ranked by what the measurements above actually support.
 
-1. **Fix the inhibitory driving force, then re-measure everything** (issue
-   #35). This is the first lead here that is a defect rather than a knob:
-   60% of inhibitory synapses depolarising their target is not a modelling
-   trade-off, it is wrong. The honest fix is not to move `E_INH`, which is a
-   cited constant, but to ask why 148 neurons rest below it. Both the
-   resting-potential distribution (median -44.2 mV against measured values of
-   -71.7, -53.2 and -45.8 for the only three ventral cord neurons ever
-   patched) and the 54.5% tonic release that produces it are in scope.
-   Predicts a fall in the depolarising bias, a fall in the cancellation
-   index, and a rise in the gap-junction control's paired delta toward zero.
-2. **Score anything new on the E/I asymmetry and the cancellation index, not
-   on AUC.** Both are cheap, both are sensitive to exactly the thing that is
-   wrong, and AUC is demonstrably blind to weight magnitude (shuffling every
-   chemical weight among the same edges costs only 0.006).
-3. **Get the acceptance criterion from the literature.** The 13x to 40x
+1. **Decide whether to pay for route 9** (issue #35). The fix is correct and
+   already written, on the `chloride-gradient` branch. What it costs is a
+   joint re-derivation of the reversal threshold, the omega coupling, the
+   modulation gain and the chemotaxis scoring, because all four were fitted
+   against a network whose inhibition was inverted. That is a piece of work
+   to schedule rather than an experiment to run, and it should be decided on
+   explicitly, because the alternative is knowingly keeping a network that
+   inverts inhibition on almost every neuron this animal has been measured on.
+2. **Ground the resting distribution in the measurements** that route 9
+   turned up. Only six ventral cord classes plus muscle are pinned today, and
+   everything else lands wherever the network solve puts it. ASEL, ASER, AVA
+   and AVB now have published values (table above) and would pin four more
+   cells, including both premotor interneurons. Expect this to perturb
+   behaviour for the same reason route 9 did, so it belongs with that
+   re-derivation rather than before it.
+3. **TWK-40 is the per-cell channel handle #28 could not find.** Meng et al.
+   attribute AVA's depolarised rest to that potassium leak, and show a
+   loss-of-function depolarises AVA further while a gain-of-function
+   hyperpolarises it to a median of -35 mV. That is a named channel, a
+   measured direction, a knockout and a quantity, which is more than the
+   CeNGEN-wide approach produced: two independent attempts to spread leak or
+   channel density by expression came back indistinguishable from a shuffled
+   control. The lesson may be that the effect is concentrated in particular
+   cells rather than smeared across the population.
+4. **Score anything new on the cancellation index, not on AUC and not on the
+   E/I current ratio.** AUC is demonstrably blind to weight magnitude
+   (shuffling every chemical weight among the same edges costs 0.006). The
+   current ratio is worse than useless here: route 9 fixed the sign inversion
+   and made that ratio go the wrong way, because correctly placed inhibition
+   is mostly a shunt and a current measure cannot see a shunt.
+5. **Get the acceptance criterion from the literature.** The 13x to 40x
    target is derived internally from `beta` and an arbitrary "20% of
-   activation range". Nobody here has cited a measured AVA membrane-potential
-   swing between forward and reversal in a behaving animal. That number sets
-   the bar for all of the above and it exists in the whole-cell recording
-   literature.
-4. **Functional sparsification driven by the atlas** (the 12% / 79% lead in
+   activation range". Meng et al. 2024 is the obvious place to look, having
+   recorded AVA and AVB across motor states; that number would set the bar
+   for everything above and replace a target this project invented.
+6. **Functional sparsification driven by the atlas** (the 12% / 79% lead in
    docs/citations.md) remains untested, but score it on dynamic range against
    a count-matched random prune, never on AUC, which rises as chemical
    transmission is removed by any means.
