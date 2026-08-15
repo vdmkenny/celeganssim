@@ -109,15 +109,22 @@ MOD_TAU_S = 60.0
 # dissociation is the result and the slowing on its own is not:
 #
 #   gain   wild type   cat-2   tph-1
-#   0.6         4.4%   -0.9%    5.4%   too weak
-#   0.7         9.0%   -0.9%   10.6%
-#   0.8        16.3%   -1.0%   28.4%   closest to the 18.3% this used to give
-#   1.2        39.7%   -1.1%   40.3%   past the band
+#   0.5         4.9%   -1.0%    3.9%   too weak
+#   0.7        27.5%   -1.9%   27.5%   inside Sawin's band
+#   0.9        35.2%   -0.8%   35.8%   past it
+#   1.3        47.3%   -1.7%   43.5%
 #
 # The curve is steep, which is the cliff this layer's docstring warns about,
 # but cat-2 stays at about zero throughout, so the pathway is still carrying
 # the dissociation rather than the gain manufacturing a slowdown.
-MOD_GAIN_PA = 0.8
+#
+# This value depends on reversal_threshold and had to be swept twice. At the
+# intermediate threshold of 0.0026 the same 0.7 gave 9%, and 0.8 gave 32%.
+# The two constants are not independent: a lower threshold admits more
+# reversals, and an interrupted forward run reads as slowing. Anyone moving
+# either one has to re-sweep the other, which is why both derivations are
+# written down rather than just their answers.
+MOD_GAIN_PA = 0.7
 
 
 class MonoamineLayer:
